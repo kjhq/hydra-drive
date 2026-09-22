@@ -20,7 +20,13 @@ try {
   };
   const runtime = path.join(root, "hydra-native");
   for (const key of ["PATH", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"]) {
-    env[key] = [runtime, library, env[key]]
+    // Windows commonly spells this "Path". Adding "PATH" to the copied
+    // environment would shadow it and hide cargo from the child process.
+    const envKey =
+      process.platform === "win32"
+        ? Object.keys(env).find((name) => name.toUpperCase() === key) || key
+        : key;
+    env[envKey] = [runtime, library, env[envKey]]
       .filter(Boolean)
       .join(path.delimiter);
   }
