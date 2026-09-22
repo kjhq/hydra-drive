@@ -57,7 +57,7 @@ test("an unreadable emulator root does not hide achievements in other roots", as
     await fs.promises.mkdir(path.dirname(file), { recursive: true });
     await fs.promises.writeFile(file, "{}");
     fs.promises.readdir = ((...args: Parameters<typeof original>) => {
-      if (String(args[0]).endsWith("Steam/CODEX")) {
+      if (String(args[0]).endsWith(path.join("Steam", "CODEX"))) {
         denied = true;
         return Promise.reject(
           Object.assign(new Error("permission denied"), { code: "EACCES" })
