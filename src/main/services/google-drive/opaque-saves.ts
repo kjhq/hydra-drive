@@ -110,10 +110,10 @@ export async function confirmOpaqueRestore(id: string) {
     commit = await store.record(id);
   const current = heads(await store.records(commit.identity));
   const accepted = await confirmDriveAction({
-    title: "Choose saved progress",
-    description: `Use ${commit.label} from ${commit.deviceName}, ${commit.createdAt}?\nCurrent cloud branches:\n${current.map((c) => `${c.deviceName} — ${c.createdAt}${c.deleted ? " (deleted)" : ""}`).join("\n")}\nExisting local progress will be backed up before replacement.`,
+    title: "Restore this backup?",
+    description: `Restore “${commit.label}” from ${commit.deviceName}, ${new Date(commit.createdAt).toLocaleString()}?\n\nProgress currently in Drive:\n${current.map((c) => `${c.deviceName} · ${new Date(c.createdAt).toLocaleString()}${c.deleted ? " · Deleted" : ""}`).join("\n")}\n\nYour current saves will be backed up first. Other versions stay in your history.`,
     cancelLabel: "Cancel",
-    confirmLabel: "Use selected snapshot",
+    confirmLabel: "Restore backup",
   });
   if (!accepted) throw new DriveError("drive_cancelled");
   return { commit, expected: current.map((c) => c.id) };

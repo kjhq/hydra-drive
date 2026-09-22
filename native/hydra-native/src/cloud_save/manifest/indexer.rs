@@ -99,19 +99,9 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[tokio::test]
-    async fn builds_index_from_real_manifest() {
-        crate::cloud_save::http::ensure_crypto_provider();
-
+    async fn builds_index_from_manifest_fixture() {
         let source_url = resolve_source_url(None);
-
-        let raw_yaml = reqwest::get(&source_url)
-            .await
-            .unwrap()
-            .error_for_status()
-            .unwrap()
-            .text()
-            .await
-            .unwrap();
+        let raw_yaml = crate::cloud_save::manifest::test_support::MANIFEST;
 
         let fetched_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)

@@ -6,13 +6,14 @@ import {
 } from "@renderer/components/google-drive/google-drive-panel";
 import type { DriveSaveIdentity } from "@types";
 import { Button, Input, VerticalFocusGroup } from "../common";
-const DriveAction = ({ id, children, onClick, disabled }: DriveActionProps) => (
-  <Button
-    focusId={id}
-    onClick={onClick}
-    disabled={disabled}
-    variant="secondary"
-  >
+const DriveAction = ({
+  id,
+  children,
+  onClick,
+  disabled,
+  intent = "secondary",
+}: DriveActionProps) => (
+  <Button focusId={id} onClick={onClick} disabled={disabled} variant={intent}>
     {children}
   </Button>
 );
@@ -25,7 +26,7 @@ const DriveText = ({ value, onChange, disabled }: DriveTextProps) => (
     disabled={disabled}
   />
 );
-export function BigPictureDriveSettings() {
+export function BigPictureDriveSettings(_props: { className?: string }) {
   return (
     <VerticalFocusGroup regionId="google-drive-settings">
       <GoogleDrivePanel Action={DriveAction} />

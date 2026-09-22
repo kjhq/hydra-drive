@@ -105,16 +105,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn finds_balatro_from_real_manifest() {
+    async fn finds_balatro_from_cached_manifest_fixture() {
         let source_url = resolve_source_url(None);
         let cache_directory = tempdir().unwrap();
+        crate::cloud_save::manifest::test_support::seed_cache(cache_directory.path(), &source_url);
 
         let index = get_manifest_index(cache_directory.path(), &source_url)
             .await
             .unwrap();
 
         let result = find_manifest_entry(&index, "2379780", None, Some("Balatro"))
-            .expect("Balatro should be found in the real manifest");
+            .expect("Balatro should be found in the cached manifest");
 
         println!("{}", serde_json::to_string_pretty(result).unwrap());
 

@@ -1,4 +1,4 @@
-# Hydra Drive — development fork
+# Waypoint — development fork
 
 This independent fork replaces Hydra Cloud save storage with your Google Drive.
 It is **not yet qualified for public release**. Google OAuth configuration and live

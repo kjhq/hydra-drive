@@ -1,3 +1,4 @@
+import { BigPictureDriveSettings } from "../../components/google-drive";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
@@ -44,6 +45,7 @@ import "./page.scss";
 
 const ALL_SETTINGS_TABS = [
   { id: "general", label: "General" },
+  { id: "saves", label: "Cloud saves" },
   { id: "downloads", label: "Downloads" },
   { id: "notifications", label: "Notifications" },
   { id: "content", label: "Content" },
@@ -91,6 +93,7 @@ const SETTINGS_TAB_CONTENT: Record<
   (props: SettingsSectionComponentProps) => React.JSX.Element | null
 > = {
   general: GeneralSettingsSection,
+  saves: BigPictureDriveSettings,
   downloads: DownloadsSettingsSection,
   notifications: NotificationsSettingsSection,
   content: ContentSettingsSection,
@@ -310,6 +313,8 @@ export default function Settings() {
           type: "item",
           itemId: EMULATION_OVERVIEW_CARD_FOCUS_IDS.ps1,
         };
+      case "saves":
+        return { type: "region", regionId: "google-drive-settings" };
       case "integrations":
         return {
           type: "item",

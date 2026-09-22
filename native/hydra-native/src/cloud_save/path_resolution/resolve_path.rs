@@ -365,10 +365,14 @@ mod tests {
     use tempfile::tempdir;
 
     #[tokio::test]
-    async fn resolves_real_balatro_save_path_with_wine() {
+    async fn resolves_cached_balatro_save_path_with_wine() {
         let shop = "steam";
         let object_id = "2379780";
         let cache_directory = tempdir().unwrap();
+        crate::cloud_save::manifest::test_support::seed_cache(
+            cache_directory.path(),
+            "https://cdn.losbroxas.org/manifest.yaml",
+        );
 
         let game_rules = get_save_rules_for_game(GetSaveRulesForGameInput {
             shop: shop.to_string(),

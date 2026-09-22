@@ -1,3 +1,4 @@
+import { Cloud, Check, HardDrive, History, ShieldCheck } from "lucide-react";
 import {
   driveErrorMessage,
   useGoogleDrive,
@@ -14,7 +15,7 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import "./google-drive-panel.scss";
+import "../../../../shared/styles/google-drive-panel.scss";
 export interface DriveTextProps {
   value: string;
   onChange: (value: string) => void;
@@ -33,16 +34,18 @@ export interface DriveActionProps {
   children: ReactNode;
   onClick: () => void;
   disabled?: boolean;
+  intent?: "primary" | "secondary" | "danger";
 }
 const DefaultAction = ({
   id,
   children,
   onClick,
   disabled,
+  intent = "secondary",
 }: DriveActionProps) => (
   <button
     id={id}
-    className="drive-panel__button"
+    className={`drive-panel__button drive-panel__button--${intent}`}
     type="button"
     onClick={onClick}
     disabled={disabled}
@@ -55,15 +58,24 @@ export function GoogleDrivePanel({
 }: {
   Action?: ComponentType<DriveActionProps>;
 }) {
-  const { connection, connectGoogleDrive, disconnectGoogleDrive, error } =
-    useGoogleDrive();
-  const [busy, setBusy] = useState(false),
-    [queue, setQueue] = useState<DriveQueueSummary[]>([]),
-    [failure, setFailure] = useState<string | null>(null);
+  const {
+    connection,
+    loading,
+    connectGoogleDrive,
+    disconnectGoogleDrive,
+    error,
+  } = useGoogleDrive();
+  const [busy, setBusy] = useState(false);
+  const [queue, setQueue] = useState<DriveQueueSummary[]>([]);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [showImport, setShowImport] = useState(false);
   const refresh = useCallback(async () => {
-    if (connection.connected && connection.account?.id)
-      setQueue(await window.electron.getDriveSaveQueue());
-    else setQueue([]);
+    setQueue(
+      connection.connected && connection.account?.id
+        ? await window.electron.getDriveSaveQueue()
+        : []
+    );
   }, [connection.connected, connection.account?.id]);
   useEffect(() => {
     void refresh().catch(() => undefined);
@@ -71,6 +83,7 @@ export function GoogleDrivePanel({
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true);
     setFailure(null);
+    setNotice(null);
     try {
       await action();
       await refresh();
@@ -80,92 +93,211 @@ export function GoogleDrivePanel({
       setBusy(false);
     }
   };
+  const status = loading
+    ? "Checking connection…"
+    : connection.needsReconnect
+      ? "Reconnect needed"
+      : connection.connected
+        ? "Connected"
+        : "Not connected";
   return (
-    <section className="drive-panel" aria-label="Google Drive saves">
-      <h3>Google Drive saves</h3>
-      <p>
-        {connection.account?.email ??
-          "Back up your progress to your own Google Drive."}
-      </p>
-      <p>
-        Backups appear in <strong>Hydra Drive Saves</strong>. Enable automatic
-        sync in each game’s save settings. The latest 10 snapshots and
-        unresolved conflicts are retained.
-      </p>
-      {!connection.persistent && (
-        <p>
-          Your system keyring is unavailable. The connection will last for this
-          session only.
-        </p>
-      )}
-      {connection.needsReconnect && (
-        <p role="alert">
-          Google authorization has expired or been revoked. Reconnect to resume
-          queued backups.
-        </p>
-      )}
-      {!connection.configured && (
-        <p>This build needs the maintainer’s Google OAuth configuration.</p>
-      )}
-      <div className="drive-panel__actions">
-        <Action
-          id="drive-connect"
-          disabled={busy || !connection.configured}
-          onClick={() => void run(() => connectGoogleDrive())}
+    <section
+      className="drive-panel drive-panel--account"
+      aria-label="Google Drive saves"
+      aria-busy={busy || loading}
+    >
+      <div className="drive-panel__header">
+        <span className="drive-panel__icon" aria-hidden="true">
+          <Cloud size={24} />
+        </span>
+        <div className="drive-panel__heading">
+          <h3>Your saves. Your Google Drive.</h3>
+          <p>Keep your progress close, wherever you play.</p>
+        </div>
+        <span
+          className={`drive-panel__status ${connection.connected ? "drive-panel__status--connected" : ""}`}
         >
-          {connection.account
-            ? "Reconnect / switch account"
-            : "Connect Google Drive"}
-        </Action>
-        {connection.account && (
-          <Action
-            id="drive-disconnect"
-            disabled={busy}
-            onClick={() => void run(disconnectGoogleDrive)}
-          >
-            Disconnect
-          </Action>
+          {connection.connected && <Check size={14} aria-hidden="true" />}
+          {status}
+        </span>
+      </div>
+      <div className="drive-panel__connection">
+        {connection.account ? (
+          <>
+            <p className="drive-panel__eyebrow">GOOGLE ACCOUNT</p>
+            <p className="drive-panel__account">{connection.account.email}</p>
+            <p className="drive-panel__muted">
+              Choose which games to sync in each game’s save settings.
+            </p>
+          </>
+        ) : (
+          <p>
+            Connect once, then choose the games you want to back up. No
+            subscription needed.
+          </p>
         )}
-        {connection.connected && (
+        <div className="drive-panel__actions">
           <Action
-            id="drive-retry"
-            disabled={busy}
-            onClick={() =>
-              void run(() => window.electron.retryDriveSaveQueue())
-            }
+            id="drive-connect"
+            intent="primary"
+            disabled={loading || busy || !connection.configured}
+            onClick={() => void run(connectGoogleDrive)}
           >
-            Retry queued backups ({queue.length})
+            {busy
+              ? "Working…"
+              : connection.needsReconnect
+                ? "Reconnect Google Drive"
+                : connection.account
+                  ? "Switch Google account"
+                  : "Connect Google Drive"}
           </Action>
+          {connection.account && (
+            <Action
+              id="drive-disconnect"
+              disabled={busy}
+              onClick={() => void run(disconnectGoogleDrive)}
+            >
+              Disconnect
+            </Action>
+          )}
+        </div>
+        {busy && (
+          <p role="status" className="drive-panel__muted">
+            Finish any sign-in prompt in your browser. Your saves stay on this
+            device.
+          </p>
         )}
-        {connection.connected && (
-          <Action
-            id="drive-import-local"
-            disabled={busy}
-            onClick={() =>
-              void run(async () => {
-                const result = await window.electron.importLocalHydraSettings();
-                setFailure(
-                  `Imported ${result.games} games and ${result.paths} save paths. Automatic sync remains off.`
-                );
-              })
-            }
+        {!loading && !connection.configured && (
+          <p className="drive-panel__message">
+            Google sign-in isn’t available in this build yet.
+          </p>
+        )}
+        {connection.connected && !connection.persistent && (
+          <p className="drive-panel__message">
+            This device can’t securely remember your account. You’ll need to
+            reconnect after closing Waypoint.
+          </p>
+        )}
+        {connection.needsReconnect && (
+          <p role="alert" className="drive-panel__message">
+            Your Google connection has expired. Reconnect to continue backing
+            up.
+          </p>
+        )}
+        {(error || failure) && (
+          <p role="alert" className="drive-panel__message">
+            {error || failure}
+          </p>
+        )}
+        {notice && (
+          <p
+            role="status"
+            className="drive-panel__message drive-panel__message--success"
           >
-            Import local Hydra library and save paths
-          </Action>
+            {notice}
+          </p>
         )}
       </div>
-      {(error || failure) && <p role="alert">{error || failure}</p>}
-      {queue.map((item) => (
-        <p key={item.id}>
-          {item.identity.objectId}: {item.status}
-          {item.error ? ` — ${driveErrorMessage(item.error)}` : ""}
-        </p>
-      ))}
-      <p className="drive-panel__note">
-        Close official Hydra before importing its local library and path
-        selections. Existing Hydra Cloud backups are not imported. Restore any
-        cloud-only saves using official Hydra before switching.
-      </p>
+      <div className="drive-panel__facts">
+        <div>
+          <HardDrive size={19} aria-hidden="true" />
+          <div>
+            <h4>Stored in your Drive</h4>
+            <p>Backups live in the Waypoint Saves folder.</p>
+          </div>
+        </div>
+        <div>
+          <History size={19} aria-hidden="true" />
+          <div>
+            <h4>Room to go back</h4>
+            <p>Your latest 10 backups, plus any unresolved conflicts.</p>
+          </div>
+        </div>
+        <div>
+          <ShieldCheck size={19} aria-hidden="true" />
+          <div>
+            <h4>You stay in control</h4>
+            <p>Sync is off until you turn it on for a game.</p>
+          </div>
+        </div>
+      </div>
+      {queue.length > 0 && (
+        <div className="drive-panel__section">
+          <div className="drive-panel__section-heading">
+            <h4>
+              {queue.length}{" "}
+              {queue.length === 1 ? "backup waiting" : "backups waiting"}
+            </h4>
+            <Action
+              id="drive-retry"
+              disabled={busy}
+              onClick={() =>
+                void run(() => window.electron.retryDriveSaveQueue())
+              }
+            >
+              Retry backups
+            </Action>
+          </div>
+          {queue.map((item) => (
+            <div className="drive-panel__queue-item" key={item.id}>
+              <span>{item.identity.objectId}</span>
+              <span>
+                {item.status === "conflict"
+                  ? "Needs your choice"
+                  : item.status === "failed"
+                    ? "Couldn’t upload"
+                    : "Waiting to upload"}
+              </span>
+              {item.error && <p>{driveErrorMessage(item.error)}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="drive-panel__section drive-panel__migration">
+        <div>
+          <h4>Moving from Hydra?</h4>
+          <p>Bring your local library and save folders with you.</p>
+        </div>
+        <Action
+          id="drive-show-import"
+          disabled={busy}
+          onClick={() => setShowImport(!showImport)}
+        >
+          {showImport ? "Hide import details" : "Import from Hydra"}
+        </Action>
+        {showImport && (
+          <div className="drive-panel__import-details">
+            <p>
+              Close Hydra before importing. If a save exists only in Hydra
+              Cloud, restore it in Hydra first.
+            </p>
+            <p>
+              Your games and folder choices will be copied. Automatic sync
+              starts off for every game.
+            </p>
+            <Action
+              id="drive-import-local"
+              disabled={busy || !connection.connected}
+              onClick={() =>
+                void run(async () => {
+                  const result =
+                    await window.electron.importLocalHydraSettings();
+                  setNotice(
+                    `Imported ${result.games} games and ${result.paths} save folders. Choose a game to turn on sync.`
+                  );
+                })
+              }
+            >
+              Choose Hydra folder
+            </Action>
+            {!connection.connected && (
+              <p className="drive-panel__muted">
+                Connect Google Drive above to import your settings.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -229,7 +361,10 @@ export function GoogleDriveHistory({
   if (!connection.connected) return null;
   return (
     <section className="drive-panel" aria-label="Google Drive backup history">
-      <h3>Google Drive backup history</h3>
+      <div className="drive-panel__heading">
+        <h3>Backup history</h3>
+        <p>Pick up where you left off, or return to an earlier save.</p>
+      </div>
       <Action
         id="drive-history-refresh"
         onClick={() => void refresh()}
@@ -239,7 +374,7 @@ export function GoogleDriveHistory({
       </Action>
       {error && <p role="alert">{error}</p>}
       {edit && (
-        <div>
+        <div className="drive-panel__confirmation">
           <Text value={label} onChange={setLabel} disabled={busy} />
           <Action
             id="drive-label-save"
@@ -264,13 +399,14 @@ export function GoogleDriveHistory({
         </div>
       )}
       {deleting && (
-        <div role="alert">
+        <div role="alert" className="drive-panel__confirmation">
           <p>
-            Delete {deleting.label} from Google Drive? Local saves will remain
-            on this device.
+            Delete “{deleting.label}” from Google Drive? Your saves on this
+            device won’t change.
           </p>
           <Action
             id="drive-delete-confirm"
+            intent="danger"
             disabled={busy}
             onClick={() =>
               void run(() => window.electron.deleteDriveBackup(deleting.id))
@@ -290,12 +426,13 @@ export function GoogleDriveHistory({
       {selected ? (
         <div role="alert" className="drive-panel__confirmation">
           <p>
-            Replace local progress with the snapshot from {selected.deviceName},{" "}
+            Restore the backup from {selected.deviceName},{" "}
             {new Date(selected.createdAt).toLocaleString()}? Your current saves
             will be backed up first.
           </p>
           <Action
             id="drive-history-confirm"
+            intent="primary"
             disabled={busy || disabled}
             onClick={() =>
               void run(() =>
@@ -306,7 +443,7 @@ export function GoogleDriveHistory({
               )
             }
           >
-            Restore this snapshot
+            Restore backup
           </Action>
           <Action
             id="drive-history-cancel"
@@ -321,14 +458,16 @@ export function GoogleDriveHistory({
         .filter((item) => item.available && !item.deleted)
         .map((item) => (
           <div key={item.id} className="drive-panel__snapshot">
-            <p>
-              <strong>{item.label}</strong> — {item.deviceName} ·{" "}
-              {new Date(item.createdAt).toLocaleString()}
-              {item.conflict
-                ? " · Conflicting progress"
-                : item.current
-                  ? " · Current"
-                  : ""}
+            <div className="drive-panel__snapshot-heading">
+              <strong>{item.label}</strong>
+              {(item.conflict || item.current) && (
+                <span className="drive-panel__status">
+                  {item.conflict ? "Needs your choice" : "Latest backup"}
+                </span>
+              )}
+            </div>
+            <p className="drive-panel__muted">
+              {item.deviceName} · {new Date(item.createdAt).toLocaleString()}
             </p>
             <div className="drive-panel__actions">
               {identity.kind === "pc" && (
@@ -337,7 +476,7 @@ export function GoogleDriveHistory({
                   disabled={disabled || busy}
                   onClick={() => setSelected(item)}
                 >
-                  Choose snapshot
+                  Restore
                 </Action>
               )}
               <Action
@@ -370,12 +509,18 @@ export function GoogleDriveHistory({
                   void run(() => window.electron.exportDriveBackup(item.id))
                 }
               >
-                Export archive
+                Export
               </Action>
             </div>
           </div>
         ))}
-      {!items.length && !error && <p>No Google Drive backups yet.</p>}
+      {!items.some((item) => item.available && !item.deleted) && !error && (
+        <div className="drive-panel__empty">
+          <History size={28} aria-hidden="true" />
+          <h4>No backups yet</h4>
+          <p>Create your first backup from this game’s save settings.</p>
+        </div>
+      )}
     </section>
   );
 }

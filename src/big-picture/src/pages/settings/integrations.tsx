@@ -1,4 +1,3 @@
-import { BigPictureDriveSettings } from "../../components/google-drive";
 import "./integrations.scss";
 
 import type {
@@ -143,7 +142,6 @@ export function IntegrationsSettingsSection({
           : "integrations-settings-section"
       }
     >
-      <BigPictureDriveSettings />
       {visibleProviders.map((provider, index) => {
         const previousProvider = visibleProviders[index - 1];
         const nextProvider = visibleProviders[index + 1];

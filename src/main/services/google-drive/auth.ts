@@ -240,7 +240,7 @@ export class GoogleDriveAuth {
         title: "Session-only Google connection",
         message: "A secure system keyring is unavailable.",
         detail:
-          "Connect for this session only? You will need to reconnect after closing Hydra Drive.",
+          "Connect for this session only? You will need to reconnect after closing Waypoint.",
         buttons: ["Cancel", "Connect for this session"],
         defaultId: 0,
         cancelId: 0,

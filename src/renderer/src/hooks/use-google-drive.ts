@@ -10,6 +10,7 @@ const initial: GoogleDriveConnection = {
 };
 export function useGoogleDrive() {
   const [connection, setConnection] = useState(initial);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let mounted = true,
@@ -18,15 +19,20 @@ export function useGoogleDrive() {
       (value) => {
         changed = true;
         setConnection(value);
+        setLoading(false);
       }
     );
     void window.electron
       .getGoogleDriveConnection()
       .then((value) => {
         if (mounted && !changed) setConnection(value);
+        if (mounted) setLoading(false);
       })
       .catch(() => {
-        if (mounted) setError("Unable to read Google Drive connection");
+        if (mounted) {
+          setError("Unable to read Google Drive connection");
+          setLoading(false);
+        }
       });
     return () => {
       mounted = false;
@@ -45,6 +51,7 @@ export function useGoogleDrive() {
     setConnection(await window.electron.disconnectGoogleDrive());
   }, []);
   return {
+    loading,
     connection,
     isDriveConnected: connection.connected,
     driveAccount: connection.connected ? connection.account : null,

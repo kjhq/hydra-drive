@@ -1,3 +1,4 @@
+import { GoogleDrivePanel } from "@renderer/components/google-drive/google-drive-panel";
 import { useTranslation } from "react-i18next";
 import {
   SettingsContextConsumer,
@@ -39,6 +40,11 @@ export default function Settings() {
         id: "general" as const,
         label: t("general"),
         icon: <GearIcon size={16} />,
+      },
+      {
+        id: "saves" as const,
+        label: "Cloud saves",
+        icon: <CloudIcon size={16} />,
       },
       {
         id: "downloads" as const,
@@ -123,6 +129,8 @@ export default function Settings() {
             if (selectedCategoryId === "content_gameplay") {
               return <SettingsContextContentGameplay />;
             }
+
+            if (selectedCategoryId === "saves") return <GoogleDrivePanel />;
 
             if (selectedCategoryId === "integrations") {
               return <SettingsContextIntegrations />;

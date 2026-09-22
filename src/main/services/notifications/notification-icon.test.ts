@@ -27,13 +27,20 @@ const createSolidImage = (width: number, height: number) =>
   });
 
 before(() => {
+  // libvips may otherwise keep fixture handles open on Windows.
+  sharp.cache(false);
   workingDirectory = fs.mkdtempSync(
     path.join(os.tmpdir(), "hydra-notification-icon-test-")
   );
 });
 
 after(() => {
-  fs.rmSync(workingDirectory, { recursive: true, force: true });
+  fs.rmSync(workingDirectory, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 100,
+  });
 });
 
 describe("buildDownloadFileName", () => {

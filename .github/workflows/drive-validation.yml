@@ -8,7 +8,7 @@ permissions:
   contents: read
 concurrency:
   group: drive-validation-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   validate:
     timeout-minutes: 120
@@ -28,13 +28,15 @@ jobs:
         with:
           workspaces: native/hydra-native -> target
           cache-bin: false
+          cache-on-failure: true
       - name: Prepare native package cache
         shell: pwsh
         run: |
           $cacheDir = Join-Path $env:RUNNER_TEMP "hydra-drive-vcpkg"
           New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
           "VCPKG_DEFAULT_BINARY_CACHE=$cacheDir" >> $env:GITHUB_ENV
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: vcpkg-cache
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: drive-vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/torrent-bridge/**/vcpkg*.json', 'native/torrent-bridge/**/triplets/**') }}
@@ -54,11 +56,29 @@ jobs:
           MAIN_VITE_RELEASE_REPO: ${{ vars.MAIN_VITE_RELEASE_REPO }}
           MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL }}
           MAIN_VITE_AUTH_URL: ${{ vars.MAIN_VITE_AUTH_URL }}
+          MAIN_VITE_CHECKOUT_URL: ${{ vars.MAIN_VITE_CHECKOUT_URL }}
           MAIN_VITE_NIMBUS_API_URL: ${{ vars.MAIN_VITE_NIMBUS_API_URL }}
           MAIN_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL }}
           RENDERER_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL }}
+      - name: Packaged Linux interface smoke test
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node scripts/qualify-packaged-ui.cjs dist/linux-unpacked/hydra-drive
+      - name: Packaged Windows interface smoke test
+        if: runner.os == 'Windows'
+        run: node scripts/qualify-packaged-ui.cjs dist/win-unpacked/HydraDrive.exe
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: interface-evidence-${{ runner.os }}
+          path: .cache/ui-qualification/**
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: hydra-drive-${{ runner.os }}
           path: dist/*unpacked/**
           if-no-files-found: error
+      - uses: actions/cache/save@v4
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}

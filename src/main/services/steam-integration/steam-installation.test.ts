@@ -144,7 +144,7 @@ test("derives the Steam Proton prefix from the app installation", () => {
       "/mnt/steam/steamapps/common/Portal 2",
       "620"
     ),
-    "/mnt/steam/steamapps/compatdata/620/pfx"
+    path.join("/mnt/steam/steamapps", "compatdata", "620", "pfx")
   );
 });
 

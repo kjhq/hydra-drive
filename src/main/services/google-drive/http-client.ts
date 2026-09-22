@@ -54,7 +54,9 @@ export class DriveHttpClient {
       try {
         response = await this.fetcher(target, {
           ...init,
-          redirect: "error",
+          // Drive uses HTTP 308 with Location for resumable progress. Expose it to
+          // the upload state machine while never following redirects with tokens.
+          redirect: "manual",
           headers: {
             ...Object.fromEntries(new Headers(init.headers)),
             Authorization: `Bearer ${token}`,

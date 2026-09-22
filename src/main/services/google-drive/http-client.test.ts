@@ -52,6 +52,17 @@ test("rejects redirects and foreign upload hosts before attaching tokens", async
   ])
     await assert.rejects(c.request(url), /drive_invalid_backup/);
 });
+test("exposes resumable 308 without following its Location or forwarding tokens", async () => {
+  const c = client((_url, init) => {
+    assert.equal(init.redirect, "manual");
+    return new Response(null, {
+      status: 308,
+      headers: { Location: "https://evil.example/", Range: "bytes=0-8388607" },
+    });
+  });
+  assert.equal((await c.request("files/upload", {}, [308])).status, 308);
+  await assert.rejects(c.request("files/upload"), /drive_request_failed/);
+});
 test("refreshes authorization once after a revoked access token", async () => {
   const forced: boolean[] = [];
   let requests = 0;

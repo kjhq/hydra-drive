@@ -1,5 +1,5 @@
 appId: community.hydradrive.launcher
-productName: Hydra Drive
+productName: Waypoint
 directories:
   buildResources: build
 extraResources:

@@ -33,3 +33,36 @@ pub async fn get_save_rules_for_game(
         entry,
     ))
 }
+
+#[cfg(test)]
+pub(crate) mod test_support {
+    use super::indexer::build_manifest_index;
+    use std::path::Path;
+
+    // Representative save and config rules from the public read-only manifest.
+    // Network availability is qualified separately; path and parser tests must
+    // not share a reqwest connection pool across separate Tokio test runtimes.
+    pub const MANIFEST: &str = r#"
+"2379780":
+  files:
+    <winAppData>/Balatro:
+      tags: [save]
+      when: [{os: windows, store: steam}]
+    <winAppData>/Balatro/settings.jkr:
+      tags: [config]
+      when: [{os: windows}]
+"#;
+
+    pub fn seed_cache(directory: &Path, source_url: &str) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+        let index = build_manifest_index(MANIFEST, source_url, now).unwrap();
+        std::fs::write(
+            directory.join("cloud-save-manifest-index.json"),
+            serde_json::to_vec(&index).unwrap(),
+        )
+        .unwrap();
+    }
+}

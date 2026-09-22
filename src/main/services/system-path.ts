@@ -37,9 +37,14 @@ export class SystemPath {
 
   static getPath(pathName: keyof typeof SystemPath.paths): string {
     try {
-      return pathName === "userData"
-        ? path.join(app.getPath("appData"), "Hydra Drive")
-        : app.getPath(pathName);
+      if (pathName === "userData") {
+        // Honor Electron's standard profile override for portable use and
+        // isolated packaged qualification without touching the normal profile.
+        const override = app.commandLine.getSwitchValue("user-data-dir");
+        if (override && path.isAbsolute(override)) return override;
+        return path.join(app.getPath("appData"), "Hydra Drive");
+      }
+      return app.getPath(pathName);
     } catch (error) {
       console.error(`Error getting path: ${error}`);
       return "";

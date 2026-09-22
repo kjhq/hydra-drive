@@ -1,0 +1,28 @@
+name: Hydra Drive documentation
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["docs/site/**", ".github/workflows/drive-docs.yml"]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: drive-docs
+  cancel-in-progress: true
+jobs:
+  deploy:
+    if: github.repository == 'kjhq/hydra-drive'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/site
+      - uses: actions/deploy-pages@v4
+        id: deployment

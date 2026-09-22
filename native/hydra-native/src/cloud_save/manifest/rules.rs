@@ -84,13 +84,14 @@ mod tests {
     use tempfile::tempdir;
 
     #[tokio::test]
-    async fn builds_balatro_save_rules_from_real_manifest() {
+    async fn builds_balatro_save_rules_from_cached_manifest_fixture() {
         let shop = "steam";
         let object_id = "2379780";
         let title = "Balatro";
 
         let source_url = resolve_source_url(None);
         let cache_directory = tempdir().unwrap();
+        crate::cloud_save::manifest::test_support::seed_cache(cache_directory.path(), &source_url);
 
         let index = get_manifest_index(cache_directory.path(), &source_url)
             .await

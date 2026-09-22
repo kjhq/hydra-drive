@@ -136,7 +136,12 @@ for (const format of ["zip", "7z"]) {
         await rm(input, { recursive: true });
         const entries = await listArchiveEntries(binaryPath, archivePath);
         const rom = selectArchivedRom(entries);
-        assert.deepEqual(rom, { name, size: content.length, platform: "nes" });
+        assert(rom);
+        // 7-Zip reports its native path separator on Windows.
+        assert.deepEqual(
+          { ...rom, name: rom.name.replaceAll("\\", "/") },
+          { name, size: content.length, platform: "nes" }
+        );
         const bytes = await readArchiveEntry(
           binaryPath,
           archivePath,

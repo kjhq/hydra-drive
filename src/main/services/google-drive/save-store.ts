@@ -112,7 +112,7 @@ export class DriveSaveStoreCore {
     return (
       await this.client.create({
         id,
-        name: "Hydra Drive Saves",
+        name: "Waypoint Saves",
         mimeType: "application/vnd.google-apps.folder",
         appProperties: { application: TAG, role: "root" },
       })

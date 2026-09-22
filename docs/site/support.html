@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Waypoint support</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <nav aria-label="Main">
+      <a href="index.html">Waypoint</a><a href="privacy.html">Privacy</a
+      ><a href="support.html">Support</a>
+    </nav>
+    <main>
+      <h1>Support</h1>
+      <p>
+        Report bugs in
+        <a href="https://github.com/kjhq/hydra-drive/issues"
+          >kjhq/hydra-drive issues</a
+        >. Include your app version, operating system, the operation that
+        failed, and the visible error. Redact account identifiers and private
+        file paths. Never attach Google tokens or OAuth authorization codes.
+      </p>
+      <h2>Connection problems</h2>
+      <p>
+        Open Settings → Cloud saves, then reconnect your Google account.
+        Development OAuth clients accept only configured test users; stable
+        public distribution is still being qualified. If a sign-in session
+        expires, start Connect again from the launcher.
+      </p>
+      <h2>Conflicting saves</h2>
+      <p>
+        Compare devices and timestamps before choosing a snapshot. Choosing one
+        does not merge game files. Keep an independent local copy when testing a
+        development build.
+      </p>
+      <h2>Moving from official Hydra</h2>
+      <p>
+        Restore cloud-only saves using official Hydra first. Close official
+        Hydra before importing its local library and save paths. The fork uses
+        separate application data and does not import Hydra account credentials
+        or enable automatic sync by default.
+      </p>
+      <h2>Private enquiries</h2>
+      <p>
+        Email <a href="mailto:arvintro@gmail.com">arvintro@gmail.com</a> for
+        privacy or security concerns. This community project does not promise a
+        support response time.
+      </p>
+    </main>
+    <footer>
+      Waypoint · Independent open-source fork ·
+      <a href="https://github.com/kjhq/hydra-drive/blob/main/LICENSE"
+        >License and attribution</a
+      >
+    </footer>
+  </body>
+</html>

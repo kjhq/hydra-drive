@@ -1,4 +1,4 @@
-# Hydra Drive saves
+# Waypoint saves
 
 This fork replaces PC snapshot, legacy Ludusavi backup, and supported emulator save storage with Google Drive. Save operations do not require a Hydra login or subscription. Catalogue, downloads, achievements, and other Hydra services remain separate.
 
@@ -14,7 +14,7 @@ Pass the release variables as environment variables to the packaging command as 
 
 Run `yarn typecheck`, `yarn test`, `yarn test:native-saves`, and `yarn build`. Build Windows and Linux packages on their respective platforms with `yarn build:win` and `yarn build:linux`. The upstream native addon requires its pinned libtorrent bridge; `yarn build:native` builds it before Rust linking.
 
-The default product is **Hydra Drive**, application ID `community.hydradrive.launcher`, protocol `hydradrive://`, executable `HydraDrive` on Windows, package name `hydra-drive`, and a separate `Hydra Drive` user-data directory. For custom branding, change these values consistently in `package.json`, `electron-builder.yml`, `src/main/index.ts`, `src/main/services/system-path.ts`, generated shortcuts/protocol handlers, and the NSIS updater-cache name. Keep a distinct application identity. Other Hydra account integrations may need the maintainer to arrange acceptance of the new callback protocol by their upstream services.
+The default product is **Waypoint**, application ID `community.hydradrive.launcher`, protocol `hydradrive://`, executable `HydraDrive` on Windows, package name `hydra-drive`, and a separate `Hydra Drive` user-data directory (retained for development-profile compatibility). For custom branding, change these values consistently in `package.json`, `electron-builder.yml`, `src/main/index.ts`, `src/main/services/system-path.ts`, generated shortcuts/protocol handlers, and the NSIS updater-cache name. Keep a distinct application identity. Other Hydra account integrations may need the maintainer to arrange acceptance of the new callback protocol by their upstream services.
 
 ## Google project and public release
 
@@ -31,7 +31,7 @@ A public privacy policy must describe Google identity data, save contents and fi
 ## First use and migration
 
 1. Restore any cloud-only backups with official Hydra first. There is no Hydra cloud importer.
-2. Close official Hydra. In Hydra Drive's integrations settings, connect Google Drive, then choose **Import local Hydra library and save paths** and select the original Hydra user-data folder containing `hydra-db`.
+2. Close official Hydra. In Waypoint's Cloud saves settings, connect Google Drive, then choose **Import from Hydra**, then **Choose Hydra folder** and select the original Hydra user-data folder containing `hydra-db`.
 3. The importer reads a temporary database copy and imports missing games, emulator configuration, and custom path bindings for the connected Google account. It does not overwrite existing entries or import account credentials, remote anchors, pending Hydra deletions, or automatic-sync preferences. Game executable/Wine paths are preserved. Game files remain in place.
 4. Enable automatic sync individually for supported games. Manual-only save formats remain manual.
 
@@ -39,7 +39,7 @@ Google accounts have separate queues, anchors, custom bindings and opaque-save a
 
 ## Storage and recovery
 
-`Hydra Drive Saves` is a visible app-created folder. Drive IDs and app properties identify records; renaming the folder does not break storage. Listing discovers tagged records across duplicate app-created roots rather than moving user data between folders.
+`Waypoint Saves` is a visible app-created folder. Drive IDs and app properties identify records; renaming the folder does not break storage. Listing discovers tagged records across duplicate app-created roots rather than moving user data between folders.
 
 Each snapshot has an independent compressed payload and a versioned JSON commit. The payload is uploaded and checksum-verified before its commit is published. Persisted operation journals contain account ID, allocated file IDs, immutable parent IDs and resumable-upload URLs. Queued source bytes are removed only after both the commit and remote payload are verified. Pagination and bounded transport retries handle larger accounts.
 

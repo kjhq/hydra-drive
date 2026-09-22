@@ -66,7 +66,7 @@ if (
 
 autoUpdater.logger = logger;
 
-app.setName("Hydra Drive");
+app.setName("Waypoint");
 app.setPath("userData", SystemPath.getPath("userData"));
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) app.quit();

@@ -126,6 +126,43 @@ fn cache_timestamp_is_stable(modified: SystemTime, hashed_at: &str) -> bool {
         .is_some_and(|safe_before| modified <= safe_before)
 }
 
+fn cache_change_time_is_stable(fingerprint: &str, hashed_at: &str) -> bool {
+    let Ok(hashed_at) = OffsetDateTime::parse(hashed_at, &Rfc3339) else {
+        return false;
+    };
+    // Never accept a cache timestamp from the future (including after clock rollback).
+    if hashed_at > OffsetDateTime::now_utc() {
+        return false;
+    }
+    let parts = fingerprint.split(':').collect::<Vec<_>>();
+    let nanos = match parts.as_slice() {
+        ["unix", _, _, seconds, nanos] => seconds
+            .parse::<i128>()
+            .ok()
+            .and_then(|seconds| seconds.checked_mul(1_000_000_000))
+            .and_then(|seconds| {
+                nanos
+                    .parse::<i128>()
+                    .ok()
+                    .and_then(|nanos| seconds.checked_add(nanos))
+            }),
+        ["windows", _, _, ticks] => ticks
+            .parse::<i128>()
+            .ok()
+            .and_then(|ticks| ticks.checked_sub(116_444_736_000_000_000))
+            .and_then(|ticks| ticks.checked_mul(100)),
+        _ => None,
+    };
+    let Some(changed_at) =
+        nanos.and_then(|nanos| OffsetDateTime::from_unix_timestamp_nanos(nanos).ok())
+    else {
+        return false;
+    };
+    hashed_at
+        .checked_sub(CACHE_RACY_TIMESTAMP_WINDOW)
+        .is_some_and(|safe_before| changed_at <= safe_before)
+}
+
 fn is_valid_hash(hash: &str) -> bool {
     hash.len() == SHA256_HEX_HASH_LENGTH
         && hash
@@ -154,10 +191,13 @@ fn hash_file_with_cache(
             && is_valid_hash(&entry.hash)
             && metadata_fingerprint.is_some()
             && entry.metadata_fingerprint == metadata_fingerprint
-            && entry
-                .hashed_at
-                .as_deref()
-                .is_some_and(|hashed_at| cache_timestamp_is_stable(modified, hashed_at))
+            && entry.hashed_at.as_deref().is_some_and(|hashed_at| {
+                cache_timestamp_is_stable(modified, hashed_at)
+                    && cache_change_time_is_stable(
+                        metadata_fingerprint.as_deref().unwrap(),
+                        hashed_at,
+                    )
+            })
     });
     let cached =
         cached.and_then(|entry| entry.hashed_at.as_ref().map(|hashed_at| (entry, hashed_at)));
@@ -256,14 +296,12 @@ mod tests {
         let temp = tempdir().unwrap();
         let path = temp.path().join("save.dat").display().to_string();
         fs::write(&path, b"save").unwrap();
+        // A cache is reusable only after both write and metadata-change windows close.
+        std::thread::sleep(StdDuration::from_millis(2100));
         let initial = hash_files(vec![path.clone()], vec![]).unwrap();
         let mut cache = initial.hash_cache;
         let cached_hash = "a".repeat(64);
         cache[0].hash = cached_hash.clone();
-        let modified = fs::metadata(&path).unwrap().modified().unwrap();
-        cache[0].hashed_at = Some(
-            format_modified_at(modified.checked_add(StdDuration::from_secs(3)).unwrap()).unwrap(),
-        );
 
         let result = hash_files(vec![path.clone(), path], cache).unwrap();
 
@@ -323,6 +361,32 @@ mod tests {
             result.files[0].last_modified_at,
             initial.files[0].last_modified_at
         );
+    }
+
+    #[test]
+    fn rejects_recent_change_time_even_when_mtime_is_old() {
+        let now = SystemTime::now();
+        let seconds = now.duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let hashed_at = format_modified_at(now).unwrap();
+        assert!(!cache_change_time_is_stable(
+            &format!("unix:1:2:{seconds}:0"),
+            &hashed_at
+        ));
+        assert!(cache_change_time_is_stable(
+            &format!("unix:1:2:{}:0", seconds - 10),
+            &hashed_at
+        ));
+        let ticks = (seconds as i128 + 11_644_473_600) * 10_000_000;
+        assert!(!cache_change_time_is_stable(
+            &format!("windows:1:0:{ticks}"),
+            &hashed_at
+        ));
+        assert!(cache_change_time_is_stable(
+            &format!("windows:1:0:{}", ticks - 100_000_000),
+            &hashed_at
+        ));
+        let future = format_modified_at(now + StdDuration::from_secs(60)).unwrap();
+        assert!(!cache_change_time_is_stable("unix:1:2:1:0", &future));
     }
 
     #[test]
