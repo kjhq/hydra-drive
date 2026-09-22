@@ -1,3 +1,13 @@
+import { Modal } from "@renderer/components";
+import { useGoogleDrive } from "@renderer/hooks/use-google-drive";
+import { useUserDetails } from "@renderer/hooks/use-user-details";
+import {
+  formatBytes,
+  GAMEMODE_SITE_URL,
+  getCloudSaveAccessAction,
+  getGameExecutableFilters,
+  MANGOHUD_SITE_URL,
+} from "@shared";
 import {
   useCallback,
   useContext,
@@ -7,38 +17,7 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Modal } from "@renderer/components";
-import {
-  formatBytes,
-  GAMEMODE_SITE_URL,
-  getCloudSaveAccessAction,
-  getGameExecutableFilters,
-  MANGOHUD_SITE_URL,
-} from "@shared";
 
-import type {
-  CreateSteamShortcutOptions,
-  Game,
-  LegacySaveExportProgress,
-  LibraryGame,
-  ProtonVersion,
-  ShortcutLocation,
-} from "@types";
-import { cloudSyncContext, gameDetailsContext } from "@renderer/context";
-import { DeleteGameModal } from "@renderer/pages/downloads/delete-game-modal";
-import {
-  useAppSelector,
-  useDownload,
-  useGameCollections,
-  useLibrary,
-  useToast,
-  useUserDetails,
-} from "@renderer/hooks";
-import { useSubscription } from "@renderer/hooks/use-subscription";
-import { RemoveGameFromLibraryModal } from "./remove-from-library-modal";
-import { ResetAchievementsModal } from "./reset-achievements-modal";
-import { ChangeGamePlaytimeModal } from "./change-game-playtime-modal";
-import { ResetPlaytimeModal } from "./reset-playtime-modal";
 import {
   AlertIcon,
   CloudIcon,
@@ -48,32 +27,53 @@ import {
   HistoryIcon,
   ImageIcon,
 } from "@primer/octicons-react";
-import { Wrench } from "lucide-react";
-import { GameAssetsSettings } from "./game-assets-settings";
-import { debounce } from "lodash-es";
-import { levelDBService } from "@renderer/services/leveldb.service";
+import { cloudSyncContext, gameDetailsContext } from "@renderer/context";
 import { getGameKey } from "@renderer/helpers";
-import "./game-options-modal.scss";
+import {
+  useAppSelector,
+  useDownload,
+  useGameCollections,
+  useLibrary,
+  useToast,
+} from "@renderer/hooks";
 import { logger } from "@renderer/logger";
-import { GameOptionsSidebar } from "./game-options-modal/sidebar";
-import { GeneralSettingsSection } from "./game-options-modal/general-section";
-import { CompatibilitySettingsSection } from "./game-options-modal/compatibility-section";
-import { DownloadsSettingsSection } from "./game-options-modal/downloads-section";
-import { DangerZoneSection } from "./game-options-modal/danger-zone-section";
-import { HydraCloudLegacySettingsSection } from "./game-options-modal/hydra-cloud-section";
-import { HydraCloudV2SettingsSection } from "./game-options-modal/hydra-cloud-v2-section";
-import type { GameSettingsCategoryId } from "./game-options-modal/types";
-import { CreateSteamShortcutModal } from "./create-steam-shortcut-modal";
+import { DeleteGameModal } from "@renderer/pages/downloads/delete-game-modal";
+import { levelDBService } from "@renderer/services/leveldb.service";
+import type {
+  CreateSteamShortcutOptions,
+  Game,
+  LegacySaveExportProgress,
+  LibraryGame,
+  ProtonVersion,
+  ShortcutLocation,
+} from "@types";
+import { debounce } from "lodash-es";
+import { Wrench } from "lucide-react";
 import {
   getCloudSaveVisibility,
   isLegacyCloudSaveSettingsAvailable,
 } from "../cloud-save-visibility";
-import { LegacySavesSection } from "./game-options-modal/legacy-saves-section";
+import { ChangeGamePlaytimeModal } from "./change-game-playtime-modal";
+import { CreateSteamShortcutModal } from "./create-steam-shortcut-modal";
+import { GameAssetsSettings } from "./game-assets-settings";
+import "./game-options-modal.scss";
 import {
   getAvailableGameSettingsCategory,
   shouldInitializeGameSettingsCategory,
   type GameSettingsCategoryInitializationState,
 } from "./game-options-modal/category-selection";
+import { CompatibilitySettingsSection } from "./game-options-modal/compatibility-section";
+import { DangerZoneSection } from "./game-options-modal/danger-zone-section";
+import { DownloadsSettingsSection } from "./game-options-modal/downloads-section";
+import { GeneralSettingsSection } from "./game-options-modal/general-section";
+import { HydraCloudLegacySettingsSection } from "./game-options-modal/hydra-cloud-section";
+import { HydraCloudV2SettingsSection } from "./game-options-modal/hydra-cloud-v2-section";
+import { LegacySavesSection } from "./game-options-modal/legacy-saves-section";
+import { GameOptionsSidebar } from "./game-options-modal/sidebar";
+import type { GameSettingsCategoryId } from "./game-options-modal/types";
+import { RemoveGameFromLibraryModal } from "./remove-from-library-modal";
+import { ResetAchievementsModal } from "./reset-achievements-modal";
+import { ResetPlaytimeModal } from "./reset-playtime-modal";
 
 export interface GameOptionsModalProps {
   visible: boolean;
@@ -237,18 +237,19 @@ export function GameOptionsModal({
     isGameDeleting,
     cancelDownload,
   } = useDownload();
-  const { userDetails, hasActiveSubscription } = useUserDetails();
+  const { driveAccount, isDriveConnected } = useGoogleDrive();
+  const { userDetails } = useUserDetails();
   const { artifacts } = useContext(cloudSyncContext);
-  const { showHydraCloudModal } = useSubscription();
+  const { connectGoogleDrive } = useGoogleDrive();
   const cloudSaveAccessAction = getCloudSaveAccessAction(
-    Boolean(userDetails),
-    hasActiveSubscription
+    Boolean(driveAccount),
+    isDriveConnected
   );
   const cloudSaveSettings = getCloudSaveVisibility(game.shop).settings;
   const { showV2: showCloudSaveV2Settings, legacyPurpose } = cloudSaveSettings;
   const showLegacyCloudSaveSettings = isLegacyCloudSaveSettingsAvailable(
     cloudSaveSettings,
-    hasActiveSubscription,
+    isDriveConnected,
     artifacts.length
   );
   const userPreferences = useAppSelector(
@@ -953,7 +954,7 @@ export function GameOptionsModal({
       isRequestedCloudCategoryAvailable &&
       cloudSaveAccessAction === "paywall"
     ) {
-      showHydraCloudModal("backup");
+      connectGoogleDrive("backup");
     }
   }, [
     cloudSaveAccessAction,
@@ -961,7 +962,7 @@ export function GameOptionsModal({
     showDownloadSettings,
     showCloudSaveV2Settings,
     showLegacyCloudSaveSettings,
-    showHydraCloudModal,
+    connectGoogleDrive,
     visible,
   ]);
 
@@ -997,7 +998,7 @@ export function GameOptionsModal({
       cloudSaveAccessAction !== "open"
     ) {
       if (cloudSaveAccessAction === "paywall") {
-        showHydraCloudModal("backup");
+        connectGoogleDrive("backup");
       }
       return;
     }

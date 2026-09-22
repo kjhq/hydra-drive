@@ -1,24 +1,11 @@
-import {
-  getCloudSaveAccessAction,
-  SubscriptionRequiredError,
-  UserNotLoggedInError,
-} from "@shared";
-
-import { HydraApi } from "../hydra-api";
+import { GoogleDriveAuth } from "../google-drive/auth";
 
 export const canAccessCloudSaves = (
-  isLoggedIn: boolean,
-  hasActiveSubscription: boolean
-) => getCloudSaveAccessAction(isLoggedIn, hasActiveSubscription) === "open";
-
-export const assertCloudSaveSubscription = (
-  isLoggedIn = HydraApi.isLoggedIn(),
-  hasActiveSubscription = HydraApi.hasActiveSubscription()
-) => {
-  if (!isLoggedIn) {
-    throw new UserNotLoggedInError();
-  }
-  if (!hasActiveSubscription) {
-    throw new SubscriptionRequiredError();
-  }
+  _isLoggedIn?: boolean,
+  _hasActiveSubscription?: boolean
+) => GoogleDriveAuth.isConnected();
+export const assertCloudSaveConnection = () => {
+  GoogleDriveAuth.session();
 };
+// Existing callers use this name; the capability now requires a Google connection only.
+export const assertCloudSaveSubscription = assertCloudSaveConnection;

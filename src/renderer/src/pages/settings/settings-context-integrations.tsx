@@ -1,3 +1,4 @@
+import { GoogleDrivePanel } from "@renderer/components/google-drive/google-drive-panel";
 import { useTranslation } from "react-i18next";
 import { SettingsDebrid } from "./settings-debrid";
 import { SettingsRetroAchievements } from "./settings-retroachievements";
@@ -9,6 +10,7 @@ export function SettingsContextIntegrations() {
   return (
     <div className="settings-context-panel">
       <div className="settings-context-panel__group">
+        <GoogleDrivePanel />
         <SettingsSteam />
         <SettingsRetroAchievements />
       </div>

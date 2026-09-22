@@ -1,0 +1,64 @@
+name: Drive save validation
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: drive-validation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.21.0
+          cache: yarn
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: native/hydra-native -> target
+          cache-bin: false
+      - name: Prepare native package cache
+        shell: pwsh
+        run: |
+          $cacheDir = Join-Path $env:RUNNER_TEMP "hydra-drive-vcpkg"
+          New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+          "VCPKG_DEFAULT_BINARY_CACHE=$cacheDir" >> $env:GITHUB_ENV
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: drive-vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/torrent-bridge/**/vcpkg*.json', 'native/torrent-bridge/**/triplets/**') }}
+      - name: Linux native prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl zip unzip tar autoconf automake libtool libgtk-3-0 libnss3 libasound2 libgbm1 xvfb
+      - run: corepack enable
+      - run: yarn --frozen-lockfile
+      - run: yarn typecheck
+      - run: yarn test
+      - run: yarn test:native-saves
+      - run: yarn build:unpack
+        env:
+          MAIN_VITE_GOOGLE_CLIENT_ID: ${{ vars.MAIN_VITE_GOOGLE_CLIENT_ID }}
+          MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ vars.MAIN_VITE_GOOGLE_CLIENT_SECRET }}
+          MAIN_VITE_RELEASE_OWNER: ${{ vars.MAIN_VITE_RELEASE_OWNER }}
+          MAIN_VITE_RELEASE_REPO: ${{ vars.MAIN_VITE_RELEASE_REPO }}
+          MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL }}
+          MAIN_VITE_AUTH_URL: ${{ vars.MAIN_VITE_AUTH_URL }}
+          MAIN_VITE_NIMBUS_API_URL: ${{ vars.MAIN_VITE_NIMBUS_API_URL }}
+          MAIN_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL }}
+          RENDERER_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hydra-drive-${{ runner.os }}
+          path: dist/*unpacked/**
+          if-no-files-found: error

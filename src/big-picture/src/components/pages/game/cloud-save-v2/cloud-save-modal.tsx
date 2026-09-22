@@ -11,7 +11,8 @@ import {
   ToggleRightIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -70,6 +71,7 @@ export interface BigPictureCloudSavePanelProps {
 }
 
 interface BigPictureCloudSaveModalProps extends BigPictureCloudSavePanelProps {
+  history?: ReactNode;
   visible: boolean;
   onClose: () => void;
 }
@@ -410,6 +412,7 @@ export function BigPictureCloudSavePanel({
 export function BigPictureCloudSaveModal({
   visible,
   onClose,
+  history,
   ...panelProps
 }: Readonly<BigPictureCloudSaveModalProps>) {
   const { t } = useTranslation("game_details");
@@ -427,6 +430,7 @@ export function BigPictureCloudSaveModal({
       className="big-picture-cloud-save-modal"
     >
       <BigPictureCloudSavePanel {...panelProps} stealFocusOnActionAppear />
+      {history}
     </Modal>
   );
 }

@@ -1,11 +1,11 @@
-import { BottomPanel, Header, Sidebar, Toast } from "@renderer/components";
-import { VideoIcon } from "@primer/octicons-react";
 import {
   DashIcon,
   ScreenFullIcon,
   ScreenNormalIcon,
+  VideoIcon,
   XIcon,
 } from "@primer/octicons-react";
+import { BottomPanel, Header, Sidebar, Toast } from "@renderer/components";
 import {
   useAppDispatch,
   useAppSelector,
@@ -18,6 +18,7 @@ import { useDownloadOptionsListener } from "@renderer/hooks/use-download-options
 import i18n from "i18next";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { WorkWonders } from "workwonders-sdk";
+import { DrivePromptHost } from "./components/google-drive/drive-prompt";
 
 import {
   clearExtraction,
@@ -41,11 +42,11 @@ import { useTranslation } from "react-i18next";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useSubscription } from "./hooks/use-subscription";
 import { ArchiveDeletionModal } from "./pages/downloads/archive-deletion-error-modal";
-import { CloudSubscriptionModal } from "./pages/shared-modals/hydra-cloud/cloud-subscription-modal";
 import { AddFriendModal } from "./pages/profile/profile-content/add-friend-modal";
 import { ClassicsScanModal } from "./pages/settings/emulation/classics-scan-modal";
 import { RetroArchScanModal } from "./pages/settings/emulation/retroarch-scan-modal";
 import { CloudGiftNotificationModal } from "./pages/shared-modals/cloud-gift-notification-modal";
+import { CloudSubscriptionModal } from "./pages/shared-modals/hydra-cloud/cloud-subscription-modal";
 
 import type { UserPreferences } from "@types";
 import "./app.scss";
@@ -705,6 +706,7 @@ export function App() {
       />
 
       <CloudGiftNotificationModal />
+      <DrivePromptHost />
 
       <ArchiveDeletionModal
         visible={showArchiveDeletionModal}

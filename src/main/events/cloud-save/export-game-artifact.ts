@@ -1,21 +1,17 @@
 import { logger, SevenZip, WindowManager } from "@main/services";
+import { extractLegacyArchive } from "@main/services/google-drive/archive";
+import { downloadOpaque } from "@main/services/google-drive/opaque-saves";
+import { DriveSaveStore } from "@main/services/google-drive/store";
 import type { LegacySaveExportProgress, LegacySaveExportResult } from "@types";
-import axios from "axios";
 import { app, BrowserWindow, dialog } from "electron";
 import fs from "node:fs";
 import path from "node:path";
-import { Readable, Transform } from "node:stream";
-import { pipeline } from "node:stream/promises";
-import * as tar from "tar";
 import { registerEvent } from "../register-event";
 import {
   exportGameArtifactArchive,
   sanitizeLegacySaveArchiveName,
 } from "./export-game-artifact-operation";
-import { requestGameArtifactDownload } from "./game-artifact-download";
 import { gameArtifactExportCoordinator } from "./game-artifact-export-coordinator";
-
-const UNKNOWN_TOTAL_PROGRESS_REPORT_INTERVAL_BYTES = 1024 * 1024;
 
 const exportGameArtifact = async (
   event: Electron.IpcMainInvokeEvent,
@@ -58,71 +54,18 @@ const exportGameArtifact = async (
           path.join(app.getPath("temp"), "hydra-legacy-save-")
         ),
       downloadTar: async (destinationPath) => {
-        const { downloadUrl } = await requestGameArtifactDownload(
-          gameArtifactId,
-          signal
-        );
-        const response = await axios.get<Readable>(downloadUrl, {
-          responseType: "stream",
-          signal,
+        const record = await new DriveSaveStore().record(gameArtifactId);
+        if (record.identity.kind !== "legacy")
+          throw new Error("drive_invalid_backup");
+        await downloadOpaque(record, destinationPath, signal);
+        sendProgress({
+          downloadedBytes: record.archiveSize,
+          totalBytes: record.archiveSize,
+          percentage: 100,
         });
-
-        const rawTotalBytes = Number(response.headers["content-length"]);
-        const totalBytes =
-          Number.isFinite(rawTotalBytes) && rawTotalBytes > 0
-            ? rawTotalBytes
-            : null;
-        let downloadedBytes = 0;
-        let lastReportedPercentage = -1;
-        let lastReportedBytes = -1;
-
-        const reportProgress = (force = false) => {
-          const percentage = totalBytes
-            ? Math.min(100, Math.floor((downloadedBytes / totalBytes) * 100))
-            : null;
-          const shouldReportKnownTotal =
-            percentage !== null && percentage !== lastReportedPercentage;
-          const shouldReportUnknownTotal =
-            percentage === null &&
-            (lastReportedBytes < 0 ||
-              downloadedBytes - lastReportedBytes >=
-                UNKNOWN_TOTAL_PROGRESS_REPORT_INTERVAL_BYTES);
-
-          if (!force && !shouldReportKnownTotal && !shouldReportUnknownTotal) {
-            return;
-          }
-
-          lastReportedPercentage = percentage ?? -1;
-          lastReportedBytes = downloadedBytes;
-          sendProgress({ downloadedBytes, totalBytes, percentage });
-        };
-
-        const progressStream = new Transform({
-          transform(chunk, _encoding, callback) {
-            downloadedBytes += Buffer.byteLength(chunk);
-            reportProgress();
-            callback(null, chunk);
-          },
-        });
-
-        reportProgress(true);
-
-        await pipeline(
-          response.data,
-          progressStream,
-          fs.createWriteStream(destinationPath, { flags: "wx" }),
-          { signal }
-        );
-        reportProgress(true);
       },
-      extractTar: async (tarPath, destinationPath) => {
-        await fs.promises.mkdir(destinationPath, { recursive: true });
-        await pipeline(
-          fs.createReadStream(tarPath),
-          tar.x({ cwd: destinationPath }),
-          { signal }
-        );
-      },
+      extractTar: (tarPath, destinationPath) =>
+        extractLegacyArchive(tarPath, destinationPath),
       createZip: (sourcePath, destinationPath) =>
         SevenZip.createZip({ sourcePath, destinationPath, signal }),
       selectDestination: async () => {

@@ -1,3 +1,18 @@
+# Hydra Drive — development fork
+
+This independent fork replaces Hydra Cloud save storage with your Google Drive.
+It is **not yet qualified for public release**. Google OAuth configuration and live
+Windows/Linux/Steam Deck testing are still in progress. Do not use development
+builds as your only copy of important saves.
+
+See [implementation and build instructions](docs/google-drive-saves.md),
+[Google configuration](docs/google-oauth-setup.md), and
+[validation runs](https://github.com/kjhq/hydra-drive/actions/workflows/drive-validation.yml).
+Report fork issues at [kjhq/hydra-drive](https://github.com/kjhq/hydra-drive/issues).
+The original project's license and attribution are retained below.
+
+---
+
 <div align="center">
 
 [<img src="https://raw.githubusercontent.com/hydralauncher/hydra/refs/heads/main/resources/icon.png" width="144"/>](https://help.hydralauncher.gg)

@@ -1,46 +1,46 @@
+import { useGoogleDrive } from "@renderer/hooks/use-google-drive";
 import type { LibraryGame } from "@types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { SidebarModal, type SidebarModalTab } from "../../../common";
 import { resolvePreferredGameAssets } from "../../../../helpers";
-import { useUserDetails } from "../../../../hooks/use-user-details.hook";
+import { SidebarModal, type SidebarModalTab } from "../../../common";
 
-import "./styles.scss";
 import {
-  GameCustomizationSettingsTab,
-  type GameCustomizationSettingsProps,
-  GAME_CUSTOMIZATION_SETTINGS_PRIMARY_CONTROL_ID,
-} from "./customization-tab";
-import {
-  GameLaunchSettingsTab,
-  type GameLaunchSettingsProps,
-  GAME_LAUNCH_SETTINGS_PRIMARY_CONTROL_ID,
-} from "./launch-tab";
-import {
+  GAME_CLOUD_SETTINGS_PRIMARY_CONTROL_ID,
   GameCloudSettingsTab,
   type GameCloudSettingsProps,
-  GAME_CLOUD_SETTINGS_PRIMARY_CONTROL_ID,
 } from "./cloud-tab";
-import {
-  GameCloudV2SettingsTab,
-  GAME_CLOUD_V2_SETTINGS_PRIMARY_CONTROL_ID,
-} from "./cloud-v2-tab";
-import {
-  GameDownloadsSettingsTab,
-  GAME_DOWNLOADS_SETTINGS_PRIMARY_CONTROL_ID,
-} from "./downloads-tab";
-import {
-  GameDangerZoneSettingsTab,
-  GAME_DANGER_ZONE_PRIMARY_CONTROL_ID,
-} from "./danger-zone-tab";
-import {
-  GameCompatibilitySettingsTab,
-  GAME_COMPATIBILITY_SETTINGS_PRIMARY_CONTROL_ID,
-} from "./compatibility-tab";
 import {
   shouldShowCloudSaveV2Tab,
   shouldShowLegacyCloudSaveTab,
 } from "./cloud-tab-visibility";
+import {
+  GAME_CLOUD_V2_SETTINGS_PRIMARY_CONTROL_ID,
+  GameCloudV2SettingsTab,
+} from "./cloud-v2-tab";
+import {
+  GAME_COMPATIBILITY_SETTINGS_PRIMARY_CONTROL_ID,
+  GameCompatibilitySettingsTab,
+} from "./compatibility-tab";
+import {
+  GAME_CUSTOMIZATION_SETTINGS_PRIMARY_CONTROL_ID,
+  GameCustomizationSettingsTab,
+  type GameCustomizationSettingsProps,
+} from "./customization-tab";
+import {
+  GAME_DANGER_ZONE_PRIMARY_CONTROL_ID,
+  GameDangerZoneSettingsTab,
+} from "./danger-zone-tab";
+import {
+  GAME_DOWNLOADS_SETTINGS_PRIMARY_CONTROL_ID,
+  GameDownloadsSettingsTab,
+} from "./downloads-tab";
+import {
+  GAME_LAUNCH_SETTINGS_PRIMARY_CONTROL_ID,
+  GameLaunchSettingsTab,
+  type GameLaunchSettingsProps,
+} from "./launch-tab";
+import "./styles.scss";
 
 type GameSettingsTabId =
   | "launch"
@@ -80,7 +80,7 @@ export function GameSettingsModal({
 }: Readonly<GameSettingsModalProps>) {
   const { t } = useTranslation(["game_details", "header"]);
   const [activeTabId, setActiveTabId] = useState<GameSettingsTabId>("launch");
-  const { userDetails, hasActiveSubscription } = useUserDetails();
+  const { driveAccount, isDriveConnected } = useGoogleDrive();
   const preferredAssets = useMemo(
     () => resolvePreferredGameAssets(game, null),
     [game]
@@ -133,16 +133,16 @@ export function GameSettingsModal({
     [game]
   );
 
-  const isSignedIn = userDetails !== null;
+  const isSignedIn = driveAccount !== null;
   const shouldShowCloudV2Tab = shouldShowCloudSaveV2Tab(
     game.shop,
     isSignedIn,
-    hasActiveSubscription
+    isDriveConnected
   );
   const shouldShowLegacyCloudTab = shouldShowLegacyCloudSaveTab(
     game.shop,
     isSignedIn,
-    hasActiveSubscription
+    isDriveConnected
   );
 
   useEffect(() => {

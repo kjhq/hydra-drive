@@ -7,14 +7,13 @@ import type {
 import { analyzeCloudSaveState } from "./analyze-cloud-save-state";
 import { assertCloudSaveSubscription } from "./cloud-save-access";
 import { loadCloudSaveV2FileDetails } from "./cloud-save-v2-file-details";
-import { classifyCloudSaveCustomPathResolutionError } from "./custom-path-binding-state";
-import { getRemoteSnapshotRestoreManifest } from "./resolve-remote-snapshot-targets";
-import { getFirstSyncState } from "./sync-game";
 import {
   cloudSaveCustomPathContextFromPathContext,
   decodeCloudSaveCustomPath,
   getLegacyCloudSaveCustomPathPathHint,
 } from "./custom-path";
+import { classifyCloudSaveCustomPathResolutionError } from "./custom-path-binding-state";
+import { getRemoteSnapshotRestoreManifest } from "./resolve-remote-snapshot-targets";
 
 const describeUnregisteredCustomPath = (
   rawPath: string,
@@ -73,10 +72,7 @@ export const getCloudSaveV2FileDetails = async (
     analysis.localSnapshotContext.pathContext
   );
   const bindings = analysis.customPathBindings;
-  const state =
-    analysis.state.state === "untracked"
-      ? getFirstSyncState(analysis)
-      : analysis.state.state;
+  const state = analysis.state.state;
 
   return loadCloudSaveV2FileDetails(
     {

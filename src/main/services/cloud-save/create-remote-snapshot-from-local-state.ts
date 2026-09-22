@@ -1,193 +1,100 @@
-import { HydraApi } from "@main/services/hydra-api";
 import type {
   CloudSaveUploadProgress,
-  CommitSnapshotRequest,
-  CommitSnapshotResponse,
   GameShop,
   LocalGameSnapshotContext,
   RemoteGameSnapshot,
   SnapshotFile,
+  SnapshotVariant,
 } from "@types";
-
-import { NativeAddon } from "../native-addon";
+import fs from "node:fs";
+import { GoogleDriveAuth } from "../google-drive/auth";
+import { pcIdentity, stagePC, summary } from "../google-drive/pc-saves";
+import { DriveSaveStore } from "../google-drive/store";
 import { buildLocalGameSnapshotContext } from "./build-local-game-snapshot";
-import {
-  CLOUD_SAVE_HASH_PATTERN,
-  cloudSaveFileKey,
-  isNonEmptyString,
-} from "./cloud-save-contract";
-import { saveCloudSaveSyncAnchor } from "./sync-anchor";
-import {
-  isCloudSaveCommitTransportFailure,
-  shouldReprepareCloudSaveSnapshot,
-} from "./snapshot-retry-policy";
-import {
-  uploadLocalGameSnapshot,
-  type PrepareLocalSnapshotOptions,
-} from "./upload-local-game-snapshot";
+import { getCloudSaveSyncAnchor, saveCloudSaveSyncAnchor } from "./sync-anchor";
 
-type ProgressCallback = (progress: CloudSaveUploadProgress) => void;
-
-export interface CreateRemoteSnapshotOptions
-  extends PrepareLocalSnapshotOptions {
+export interface CreateRemoteSnapshotOptions {
+  baseVersion: number;
   expectedSnapshotId?: string | null;
   unresolvedRemoteEntryIds?: string[];
   updateAnchor?: boolean;
   assertEnvironmentCurrent?: () => Promise<void>;
+  customPathRawPaths?: string[];
+  variants?: SnapshotVariant[];
+  files?: SnapshotFile[];
+  aggregateHash?: string;
+  parentIds?: string[];
+  queueOnly?: boolean;
 }
-
-const resolveCreateRemoteSnapshotOptions = (
-  options?: CreateRemoteSnapshotOptions
-) => {
-  if (options !== undefined) return options;
-  return { baseVersion: 0 };
-};
-
-const validateCommitResponse = (value: unknown): CommitSnapshotResponse => {
-  if (!value || typeof value !== "object") {
-    throw new Error("Invalid commit snapshot response");
-  }
-  const response = value as Record<string, unknown>;
-  if (
-    Object.keys(response).some(
-      (key) =>
-        ![
-          "snapshotId",
-          "version",
-          "fileCount",
-          "totalSizeBytes",
-          "aggregateHash",
-        ].includes(key)
-    ) ||
-    !isNonEmptyString(response.snapshotId) ||
-    typeof response.version !== "number" ||
-    !Number.isSafeInteger(response.version) ||
-    response.version < 1 ||
-    typeof response.fileCount !== "number" ||
-    !Number.isSafeInteger(response.fileCount) ||
-    response.fileCount < 0 ||
-    typeof response.totalSizeBytes !== "number" ||
-    !Number.isSafeInteger(response.totalSizeBytes) ||
-    response.totalSizeBytes < 0 ||
-    !isNonEmptyString(response.aggregateHash) ||
-    !CLOUD_SAVE_HASH_PATTERN.test(response.aggregateHash)
-  ) {
-    throw new Error("Invalid commit snapshot response");
-  }
-  return value as CommitSnapshotResponse;
-};
-
-const commitPendingSnapshot = async (pendingSnapshotId: string) => {
-  let response: unknown;
-  const request: CommitSnapshotRequest = { pendingSnapshotId };
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      response = await HydraApi.post<unknown>(
-        "/profile/cloud-saves/commit-snapshot",
-        request,
-        { needsAuth: true, needsSubscription: true }
-      );
-      break;
-    } catch (error) {
-      if (attempt === 0 && isCloudSaveCommitTransportFailure(error)) continue;
-      throw error;
-    }
-  }
-  return validateCommitResponse(response);
-};
-
 export const createRemoteSnapshotFromLocalState = async (
   objectId: string,
   shop: GameShop,
-  onProgress?: ProgressCallback,
+  onProgress?: (progress: CloudSaveUploadProgress) => void,
   localSnapshotContext?: LocalGameSnapshotContext,
   options?: CreateRemoteSnapshotOptions
 ): Promise<RemoteGameSnapshot | null> => {
-  const resolvedOptions = resolveCreateRemoteSnapshotOptions(options);
+  const session = GoogleDriveAuth.session();
   const context =
     localSnapshotContext ??
     (await buildLocalGameSnapshotContext(objectId, shop));
-  const variants = resolvedOptions.variants ?? context.variants;
-  const files: SnapshotFile[] = resolvedOptions.files ?? context.files;
-  const customPathRawPaths =
-    resolvedOptions.customPathRawPaths ?? context.customPathRawPaths;
-  const expectedAggregateHash =
-    resolvedOptions.aggregateHash ??
-    NativeAddon.buildSnapshotAggregateHash({ variants, files });
-
-  let committed: CommitSnapshotResponse | null = null;
-  for (let prepareAttempt = 0; prepareAttempt < 2; prepareAttempt += 1) {
-    try {
-      await resolvedOptions.assertEnvironmentCurrent?.();
-      const upload = await uploadLocalGameSnapshot(
-        objectId,
-        shop,
-        onProgress,
-        context,
-        {
-          ...resolvedOptions,
-          variants,
-          files,
-          customPathRawPaths,
-          aggregateHash: expectedAggregateHash,
-        }
-      );
-      if (!upload.pendingSnapshotId) return null;
-      await resolvedOptions.assertEnvironmentCurrent?.();
-      committed = await commitPendingSnapshot(upload.pendingSnapshotId);
-      break;
-    } catch (error) {
-      if (prepareAttempt === 0 && shouldReprepareCloudSaveSnapshot(error))
-        continue;
-      throw error;
-    }
-  }
-  if (!committed) throw new Error("Cloud Save commit did not complete");
-
-  const expectedTotalSize = files.reduce(
-    (total, file) => total + file.sizeBytes,
-    0
+  const anchor = await getCloudSaveSyncAnchor(
+    shop,
+    objectId,
+    context.environmentId
   );
-  if (
-    committed.version !== resolvedOptions.baseVersion + 1 ||
-    (resolvedOptions.expectedSnapshotId &&
-      committed.snapshotId !== resolvedOptions.expectedSnapshotId) ||
-    committed.fileCount !== files.length ||
-    committed.totalSizeBytes !== expectedTotalSize ||
-    committed.aggregateHash !== expectedAggregateHash
-  ) {
-    throw new Error("Committed Cloud Save snapshot is inconsistent");
-  }
-
-  if (resolvedOptions.updateAnchor !== false) {
-    await resolvedOptions.assertEnvironmentCurrent?.();
-    await saveCloudSaveSyncAnchor(shop, objectId, context.environmentId, {
-      schemaVersion: 4,
-      environmentId: context.environmentId,
-      baseSnapshotId: committed.snapshotId,
-      baseVersion: committed.version,
-      baseAggregateHash: committed.aggregateHash,
-      entries: files.map((file) => ({
-        variantId: file.variantId,
-        rawPath: file.rawPath,
-        relativePath: file.relativePath,
-        hash: file.hash,
-        sizeBytes: file.sizeBytes,
-      })),
-      unresolvedRemoteEntryIds: (
-        resolvedOptions.unresolvedRemoteEntryIds ?? []
-      ).filter((entryId) =>
-        files.some((file) => cloudSaveFileKey(file) === entryId)
-      ),
-      updatedAt: new Date().toISOString(),
+  const parentIds =
+    options?.parentIds ??
+    (options?.expectedSnapshotId
+      ? [options.expectedSnapshotId]
+      : anchor
+        ? [anchor.baseSnapshotId]
+        : []);
+  const staged = await stagePC(context, options);
+  try {
+    await options?.assertEnvironmentCurrent?.();
+    GoogleDriveAuth.assert(session);
+    onProgress?.({
+      completedFiles: 0,
+      totalFiles: staged.manifest.files.length,
+      completedBytes: 0,
+      totalBytes: context.totalSizeBytes,
+      currentFile: null,
     });
+    const store = new DriveSaveStore();
+    const input = {
+      identity: pcIdentity(objectId, shop),
+      parentIds,
+      label: "Game save",
+      archive: staged.archive,
+      manifest: staged.manifest,
+    };
+    if (options?.queueOnly) {
+      await store.enqueue(input);
+      return null;
+    }
+    const commit = await store.publish(input);
+    GoogleDriveAuth.assert(session);
+    const snapshot = summary(commit);
+    if (options?.updateAnchor !== false)
+      await saveCloudSaveSyncAnchor(shop, objectId, context.environmentId, {
+        schemaVersion: 4,
+        environmentId: context.environmentId,
+        baseSnapshotId: snapshot.id,
+        baseVersion: 1,
+        baseAggregateHash: snapshot.aggregateHash,
+        entries: staged.manifest.files,
+        unresolvedRemoteEntryIds: options?.unresolvedRemoteEntryIds ?? [],
+        updatedAt: new Date().toISOString(),
+      });
+    onProgress?.({
+      completedFiles: snapshot.fileCount,
+      totalFiles: snapshot.fileCount,
+      completedBytes: snapshot.totalSizeBytes,
+      totalBytes: snapshot.totalSizeBytes,
+      currentFile: null,
+    });
+    return snapshot;
+  } finally {
+    await fs.promises.rm(staged.directory, { recursive: true, force: true });
   }
-
-  return {
-    id: committed.snapshotId,
-    version: committed.version,
-    fileCount: committed.fileCount,
-    totalSizeBytes: committed.totalSizeBytes,
-    aggregateHash: committed.aggregateHash,
-  };
 };

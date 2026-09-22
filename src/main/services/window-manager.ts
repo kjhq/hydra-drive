@@ -36,11 +36,11 @@ import path from "node:path";
 import UserAgent from "user-agents";
 import { HydraApi } from "./hydra-api";
 import { logger } from "./logger";
+import { getRetroAchievementsConnectionWindowLayout } from "./retroachievements-connection-window-layout";
 import {
   addSteamGridDbCacheControl,
   isSteamGridDbArtworkRequest,
 } from "./steam-grid-db-cache";
-import { getRetroAchievementsConnectionWindowLayout } from "./retroachievements-connection-window-layout";
 
 const isLinuxWayland =
   process.platform === "linux" &&
@@ -74,6 +74,12 @@ export class WindowManager {
   }
 
   private static readonly editorWindows: Map<string, BrowserWindow> = new Map();
+
+  public static getDrivePromptWindow() {
+    return this.bigPicture && !this.bigPicture.isDestroyed()
+      ? this.bigPicture
+      : this.mainWindow;
+  }
 
   public static get mainWindow(): Electron.BrowserWindow | null {
     return this.mainWindowInstance;
@@ -627,14 +633,14 @@ export class WindowManager {
     closeWindow: () => void
   ) {
     contents.on("will-navigate", (_event, url) => {
-      if (url.startsWith("hydralauncher://auth")) {
+      if (url.startsWith("hydradrive://auth")) {
         closeWindow();
 
         HydraApi.handleExternalAuth(url);
         return;
       }
 
-      if (url.startsWith("hydralauncher://update-account")) {
+      if (url.startsWith("hydradrive://update-account")) {
         closeWindow();
 
         WindowManager.sendToAppWindows("on-account-updated");

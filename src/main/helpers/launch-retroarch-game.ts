@@ -1,18 +1,19 @@
-import { existsSync } from "node:fs";
-import path from "node:path";
 import { db, gamesSublevel, levelKeys } from "@main/level";
 import { emulators, logger, retroarch } from "@main/services";
+import { cleanupEmulatorSouvenirSession } from "@main/services/emulators/emulator-souvenir-config";
+import { prepareEmulatorSouvenirs } from "@main/services/emulators/prepare-emulator-souvenirs";
 import type {
   GameShop,
   RetroArchCoreName,
   RetroArchPlatform,
   UserPreferences,
 } from "@types";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { withEmulatorSaveLock } from "../services/google-drive/emulator-restore-guard";
 import { resolveEmulatorWrappers } from "./launch-classics-game";
 import { resolveLaunchCommand } from "./resolve-launch-command";
 import { spawnDetachedEmulator } from "./spawn-detached-emulator";
-import { prepareEmulatorSouvenirs } from "@main/services/emulators/prepare-emulator-souvenirs";
-import { cleanupEmulatorSouvenirSession } from "@main/services/emulators/emulator-souvenir-config";
 
 export class RetroArchNotConfiguredError extends Error {
   code = "RETROARCH_NOT_CONFIGURED" as const;
@@ -41,7 +42,7 @@ export interface LaunchRetroArchGameOptions {
   platform: RetroArchPlatform;
 }
 
-export const launchRetroArchGame = async (
+const launchRetroArchGameUnlocked = async (
   options: LaunchRetroArchGameOptions
 ): Promise<void> => {
   const { shop, objectId, romPath, platform } = options;
@@ -136,3 +137,6 @@ export const launchRetroArchGame = async (
     throw error;
   }
 };
+
+export const launchRetroArchGame = (options: LaunchRetroArchGameOptions) =>
+  withEmulatorSaveLock(() => launchRetroArchGameUnlocked(options));

@@ -1,19 +1,19 @@
 import type { CloudSaveCustomPathBindings, GameShop } from "@types";
 
-import { HydraApi } from "../hydra-api.js";
+import { pcIdentity } from "../google-drive/pc-saves";
+import { DriveSaveStore } from "../google-drive/store";
 import { NativeAddon } from "../native-addon.js";
 import { buildLocalGameSnapshotContext } from "./build-local-game-snapshot.js";
+import { getCloudSaveGameContext } from "./cloud-save-game-context.js";
 import { createRemoteSnapshotFromLocalState } from "./create-remote-snapshot-from-local-state.js";
+import { dismissPendingCloudSaveCustomPathApprovalForRawPath } from "./custom-path-approval.js";
 import {
   buildCloudSaveCustomPathRemovalProposal,
   executeCloudSaveCustomPathRemoteRemoval,
 } from "./custom-path-removal.js";
-import { dismissPendingCloudSaveCustomPathApprovalForRawPath } from "./custom-path-approval.js";
-import { cloudSaveCustomPathContextFromPathContext } from "./custom-path.js";
 import { withCloudSaveCustomPathStoreMutation } from "./custom-path-store.js";
 import { executeCloudSaveCustomPathUntracking } from "./custom-path-untracking-policy.js";
-import { getCloudSaveGameContext } from "./cloud-save-game-context.js";
-import { buildDeleteGameCloudSaveSnapshotsUrl } from "./delete-game-cloud-save-data-policy.js";
+import { cloudSaveCustomPathContextFromPathContext } from "./custom-path.js";
 import { listRemoteGameSnapshots } from "./list-remote-game-snapshots.js";
 import {
   cloudSaveOperationGate,
@@ -39,13 +39,7 @@ const publishCustomPathRemoval = async (
     await executeCloudSaveCustomPathRemoteRemoval({
       proposal,
       deleteSnapshot: () =>
-        HydraApi.delete<void>(
-          buildDeleteGameCloudSaveSnapshotsUrl(objectId, shop),
-          {
-            needsAuth: true,
-            needsSubscription: true,
-          }
-        ),
+        new DriveSaveStore().deleteAll(pcIdentity(objectId, shop)),
       updateSnapshot: async () => {
         const aggregateHash = NativeAddon.buildSnapshotAggregateHash({
           variants: proposal.variants,

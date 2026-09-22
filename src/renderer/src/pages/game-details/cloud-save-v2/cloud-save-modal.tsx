@@ -1,4 +1,3 @@
-import { useEffect, useState, type ReactNode } from "react";
 import {
   ArrowClockwiseIcon,
   CircleNotchIcon,
@@ -9,25 +8,27 @@ import {
   MonitorIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 
+import { Button, Modal } from "@renderer/components";
+import { useDate } from "@renderer/hooks";
+import { formatBytes } from "@shared";
 import type {
   CloudSaveConflictResolution,
   CloudSaveOverview,
   CloudSaveSyncProgressPayload,
 } from "@types";
-import { formatBytes } from "@shared";
-import { Button, Modal } from "@renderer/components";
-import { useDate } from "@renderer/hooks";
 import {
-  getCloudSavePanelAction,
   getCloudSaveOperationPresentation,
+  getCloudSavePanelAction,
   getCloudSavePartialDescriptionKey,
   getCloudSavePresentation,
   getCloudSaveSnapshotPanelMode,
-  type CloudSavePanelAction,
   shouldShowCloudSaveEmptySnapshot,
+  type CloudSavePanelAction,
 } from "./cloud-save-presentation";
 
 export interface CloudSavePanelProps {
@@ -53,6 +54,7 @@ export interface CloudSavePanelProps {
 }
 
 interface CloudSaveModalProps extends Omit<CloudSavePanelProps, "active"> {
+  history?: ReactNode;
   visible: boolean;
   onClose: () => void;
 }
@@ -511,6 +513,7 @@ export function CloudSavePanel({
 export function CloudSaveModal({
   visible,
   onClose,
+  history,
   ...panelProps
 }: Readonly<CloudSaveModalProps>) {
   const { t } = useTranslation("game_details");
@@ -526,6 +529,7 @@ export function CloudSaveModal({
       <div className="cloud-save-v2__dialog-content">
         <CloudSavePanel {...panelProps} active={visible} />
       </div>
+      {history}
     </Modal>
   );
 }

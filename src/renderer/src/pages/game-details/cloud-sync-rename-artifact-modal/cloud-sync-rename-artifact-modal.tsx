@@ -1,14 +1,14 @@
-import { useCallback, useContext, useEffect } from "react";
+import { yupResolver } from "@hookform/resolvers/yup";
 import { Button, Modal, ModalProps, TextField } from "@renderer/components";
+import { cloudSyncContext } from "@renderer/context";
+import { useToast } from "@renderer/hooks";
+import { logger } from "@renderer/logger";
+import type { GameArtifact } from "@types";
+import { useCallback, useContext, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import type { GameArtifact } from "@types";
-import { cloudSyncContext } from "@renderer/context";
-import { logger } from "@renderer/logger";
 import * as yup from "yup";
-import { yupResolver } from "@hookform/resolvers/yup";
 import { InferType } from "yup";
-import { useToast } from "@renderer/hooks";
 
 import "./cloud-sync-rename-artifact-modal.scss";
 
@@ -28,7 +28,7 @@ export function CloudSyncRenameArtifactModal({
     label: yup
       .string()
       .required(t("required_field"))
-      .max(255, t("max_length_field", { length: 255 })),
+      .max(100, t("max_length_field", { length: 100 })),
   });
 
   const { getGameArtifacts } = useContext(cloudSyncContext);
@@ -58,14 +58,9 @@ export function CloudSyncRenameArtifactModal({
       try {
         if (!artifact) return;
 
-        await window.electron.hydraApi.put(
-          `/profile/games/artifacts/${artifact.id}`,
-          {
-            data: {
-              label: data.label,
-            },
-          }
-        );
+        await window.electron.updateDriveBackup(artifact.id, {
+          label: data.label,
+        });
         await getGameArtifacts();
 
         showSuccessToast(t("artifact_renamed"));

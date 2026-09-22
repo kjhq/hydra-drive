@@ -313,6 +313,7 @@ export interface CloudSaveStateResult {
 }
 
 export interface CloudSaveOverview extends CloudSaveStateResult {
+  driveHeadIds?: string[];
   localSnapshotSummary: {
     updatedAt: string | null;
     totalSizeBytes: number;

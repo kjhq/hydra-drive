@@ -1,4 +1,8 @@
 import {
+  driveErrorMessage,
+  useGoogleDrive,
+} from "@renderer/hooks/use-google-drive";
+import {
   createContext,
   useCallback,
   useContext,
@@ -9,6 +13,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
+import { BigPictureDriveHistory } from "../../../google-drive";
 
 import {
   getCloudSaveSyncErrorKind,
@@ -23,7 +28,7 @@ import type {
   GameShop,
 } from "@types";
 
-import { useBigPictureToast, useUserDetails } from "../../../../hooks";
+import { useBigPictureToast } from "../../../../hooks";
 import { BigPictureCloudSaveConflictModal } from "./cloud-save-conflict-modal";
 import { BigPictureCloudSaveCustomPathModal } from "./cloud-save-custom-path-modal";
 import {
@@ -149,10 +154,10 @@ export function BigPictureCloudSaveProvider({
 }: Readonly<BigPictureCloudSaveProviderProps>) {
   const { t } = useTranslation("game_details");
   const [searchParams, setSearchParams] = useSearchParams();
-  const { userDetails, hasActiveSubscription } = useUserDetails();
+  const { driveAccount, isDriveConnected } = useGoogleDrive();
   const { showErrorToast, showSuccessToast, showWarningToast } =
     useBigPictureToast();
-  const canUseCloudSaves = Boolean(userDetails) && hasActiveSubscription;
+  const canUseCloudSaves = Boolean(driveAccount) && isDriveConnected;
   const canCheckCloudSaves =
     shop === "steam" && canUseCloudSaves && hasExecutablePath;
   const { overview, isRefreshing, hasRefreshError, refresh } =
@@ -187,6 +192,10 @@ export function BigPictureCloudSaveProvider({
 
   const showSyncError = useCallback(
     (error: unknown) => {
+      if (error instanceof Error && error.message.includes("drive_")) {
+        showErrorToast(driveErrorMessage(error));
+        return true;
+      }
       const errorKind = getCloudSaveSyncErrorKind(error);
 
       if (errorKind === "restore-metadata") {
@@ -392,7 +401,8 @@ export function BigPictureCloudSaveProvider({
             objectId,
             shop,
             resolution,
-            onProgress
+            onProgress,
+            overview?.driveHeadIds
           );
         } else {
           const result =
@@ -425,6 +435,7 @@ export function BigPictureCloudSaveProvider({
       }
     },
     [
+      overview?.driveHeadIds,
       canUseCloudSaves,
       gameKey,
       hasExecutablePath,
@@ -439,7 +450,7 @@ export function BigPictureCloudSaveProvider({
 
   const handleAutomaticSyncChange = async (enabled: boolean) => {
     if (!canUseCloudSaves) {
-      throw new Error("Cloud Saves require an active subscription");
+      throw new Error("Connect Google Drive to use cloud saves");
     }
 
     try {
@@ -616,20 +627,9 @@ export function BigPictureCloudSaveProvider({
     panelProps,
     openManager: () => {
       if (!canUseCloudSaves) {
-        showErrorToast(
-          t(
-            userDetails
-              ? "cloud_save_v2_subscription_required_title"
-              : "cloud_save_v2_sign_in_required_title"
-          ),
-          {
-            message: t(
-              userDetails
-                ? "cloud_save_v2_subscription_required_description"
-                : "cloud_save_v2_sign_in_required_description"
-            ),
-          }
-        );
+        void window.electron
+          .connectGoogleDrive()
+          .catch(() => showErrorToast("Unable to connect Google Drive"));
         return;
       }
       setWasOpenedFromLaunchConflict(false);
@@ -642,6 +642,15 @@ export function BigPictureCloudSaveProvider({
       {children}
 
       <BigPictureCloudSaveModal
+        history={
+          isModalVisible && (
+            <BigPictureDriveHistory
+              identity={{ kind: "pc", shop, objectId }}
+              disabled={isGameRunning || isSyncing}
+              onRestored={() => void refresh()}
+            />
+          )
+        }
         {...panelProps}
         visible={isModalVisible}
         showLaunchConflictWarning={wasOpenedFromLaunchConflict}

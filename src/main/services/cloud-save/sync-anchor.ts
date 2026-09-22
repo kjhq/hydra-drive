@@ -1,5 +1,6 @@
-import { cloudSaveSyncAnchorsSublevel, db, levelKeys } from "@main/level";
-import type { CloudSaveSyncAnchor, GameShop, User } from "@types";
+import { cloudSaveSyncAnchorsSublevel } from "@main/level";
+import type { CloudSaveSyncAnchor, GameShop } from "@types";
+import { GoogleDriveAuth } from "../google-drive/auth";
 
 import {
   CLOUD_SAVE_HASH_PATTERN,
@@ -49,13 +50,7 @@ const isValidAnchor = (
   return anchor.unresolvedRemoteEntryIds.every((id) => ids.has(id));
 };
 
-const getCurrentUserId = async () => {
-  const user = await db.get<string, User>(levelKeys.user, {
-    valueEncoding: "json",
-  });
-  if (!user?.id) throw new Error("Cloud save sync requires a signed-in user");
-  return user.id;
-};
+const getCurrentUserId = async () => `google:${GoogleDriveAuth.accountId()}`;
 
 const getLegacyAnchorKey = async (shop: GameShop, objectId: string) =>
   JSON.stringify([await getCurrentUserId(), shop, objectId]);

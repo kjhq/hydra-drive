@@ -9,7 +9,7 @@ import { getCloudSaveAutomaticSyncEnabled } from "./automatic-sync-settings";
 import { assertCloudSaveSubscription } from "./cloud-save-access";
 import { cloudSaveFileKey } from "./cloud-save-contract";
 import { getUnconfiguredCloudSaveCustomPathCandidates } from "./custom-path-approval-policy";
-import { getFirstSyncState, getSuggestedCloudSaveAction } from "./sync-game";
+import { getSuggestedCloudSaveAction } from "./sync-game";
 
 export const getCloudSaveOverview = async (
   objectId: string,
@@ -21,10 +21,7 @@ export const getCloudSaveOverview = async (
     analyzeCloudSaveState(objectId, shop),
     getCloudSaveAutomaticSyncEnabled(objectId, shop),
   ]);
-  const state =
-    analysis.state.state === "untracked"
-      ? getFirstSyncState(analysis)
-      : analysis.state.state;
+  const state = analysis.state.state;
   const unresolvedEntryIds = new Set([
     ...(analysis.anchor?.unresolvedRemoteEntryIds ?? []),
     ...analysis.merge.unresolvedRemoteEntryIds,
@@ -54,6 +51,7 @@ export const getCloudSaveOverview = async (
 
   return {
     ...analysis.state,
+    driveHeadIds: analysis.driveHeadIds,
     state,
     hasChanged: state !== "synced",
     localSnapshotSummary: {

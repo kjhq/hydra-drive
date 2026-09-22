@@ -1,20 +1,20 @@
-import { levelKeys, gamesSublevel, db } from "@main/level";
-import path from "node:path";
-import * as tar from "tar";
+import { backupsPath } from "@main/constants";
+import { normalizePath } from "@main/helpers";
+import { gamesSublevel, levelKeys } from "@main/level";
+import { formatDate } from "@shared";
+import type { GameShop } from "@types";
+import i18next, { t } from "i18next";
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
-import type { GameShop, User } from "@types";
-import { backupsPath } from "@main/constants";
-import { HydraApi } from "./hydra-api";
-import { normalizePath } from "@main/helpers";
+import path from "node:path";
+import * as tar from "tar";
+import { isGameRunning } from "./game-running-state";
+import { GoogleDriveAuth } from "./google-drive/auth";
+import { legacyIdentity, publishOpaque } from "./google-drive/opaque-saves";
 import { logger } from "./logger";
-import { WindowManager } from "./window-manager";
-import axios from "axios";
 import { Ludusavi } from "./ludusavi";
-import { formatDate, SubscriptionRequiredError } from "@shared";
-import i18next, { t } from "i18next";
 import { SystemPath } from "./system-path";
+import { WindowManager } from "./window-manager";
 import { Wine } from "./wine";
 
 export class CloudSync {
@@ -55,7 +55,10 @@ export class CloudSync {
     objectId: string,
     winePrefix: string | null
   ) {
-    const backupPath = path.join(backupsPath, `${shop}-${objectId}`);
+    await fs.promises.mkdir(backupsPath, { recursive: true });
+    const backupPath = await fs.promises.mkdtemp(
+      path.join(backupsPath, `${shop}-${objectId}-`)
+    );
 
     // Remove existing backup
     if (fs.existsSync(backupPath)) {
@@ -79,6 +82,7 @@ export class CloudSync {
       ["."]
     );
 
+    await fs.promises.rm(backupPath, { recursive: true, force: true });
     return tarLocation;
   }
 
@@ -88,17 +92,9 @@ export class CloudSync {
     downloadOptionTitle: string | null,
     label?: string
   ) {
-    const hasActiveSubscription = await db
-      .get<string, User>(levelKeys.user, { valueEncoding: "json" })
-      .then((user) => {
-        const expiresAt = new Date(user?.subscription?.expiresAt ?? 0);
-        return expiresAt > new Date();
-      });
-
-    if (!hasActiveSubscription) {
-      throw new SubscriptionRequiredError();
-    }
-
+    const session = GoogleDriveAuth.session();
+    if (isGameRunning(objectId, shop))
+      throw new Error("cloud_save_game_running");
     const game = await gamesSublevel.get(levelKeys.game(shop, objectId));
     const effectiveWinePrefixPath = Wine.getEffectivePrefixPath(
       game?.winePrefixPath,
@@ -111,7 +107,6 @@ export class CloudSync {
       effectiveWinePrefixPath
     );
 
-    const stat = await fs.promises.stat(bundleLocation);
     let resolvedWinePrefixPath: string | null = null;
 
     if (effectiveWinePrefixPath) {
@@ -120,31 +115,18 @@ export class CloudSync {
         : effectiveWinePrefixPath;
     }
 
-    const { uploadUrl } = await HydraApi.post<{
-      id: string;
-      uploadUrl: string;
-    }>("/profile/games/artifacts", {
-      artifactLengthInBytes: stat.size,
-      shop,
-      objectId,
-      hostname: os.hostname(),
-      winePrefixPath: resolvedWinePrefixPath,
-      homeDir: this.getWindowsLikeUserProfilePath(effectiveWinePrefixPath),
-      downloadOptionTitle,
-      platform: process.platform,
-      label,
-    });
-
-    const fileBuffer = await fs.promises.readFile(bundleLocation);
-
-    await axios.put(uploadUrl, fileBuffer, {
-      headers: {
-        "Content-Type": "application/tar",
-      },
-      onUploadProgress: (progressEvent) => {
-        logger.log(progressEvent);
-      },
-    });
+    GoogleDriveAuth.assert(session);
+    const published = await publishOpaque(
+      legacyIdentity(objectId, shop),
+      bundleLocation,
+      label ?? "Game backup",
+      {
+        winePrefixPath: resolvedWinePrefixPath,
+        homeDir: this.getWindowsLikeUserProfilePath(effectiveWinePrefixPath),
+        downloadOptionTitle,
+        platform: process.platform,
+      }
+    );
 
     WindowManager.sendToAppWindows(
       `on-upload-complete-${objectId}-${shop}`,
@@ -156,5 +138,6 @@ export class CloudSync {
     } catch (error) {
       logger.error("Failed to remove tar file", { bundleLocation, error });
     }
+    return published;
   }
 }

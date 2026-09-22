@@ -22,7 +22,7 @@ export const resolveStoredCloudSaveAutomaticSyncMode = (
 ) =>
   resolveCloudSaveAutomaticSyncMode({
     legacyEnabled,
-    v2Enabled: storedV2Enabled ?? true,
+    v2Enabled: storedV2Enabled ?? false,
   });
 
 export const resolveStoredCloudSaveAutomaticSyncModeForShop = (

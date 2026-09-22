@@ -1,9 +1,3 @@
-import { Button, CheckboxField } from "@renderer/components";
-import { useContext, useEffect, useMemo, useState } from "react";
-import type { ChangeEvent } from "react";
-import { cloudSyncContext, gameDetailsContext } from "@renderer/context";
-import "./cloud-sync-panel.scss";
-import { formatBytes } from "@shared";
 import {
   ClockIcon,
   DeviceDesktopIcon,
@@ -16,22 +10,23 @@ import {
   TrashIcon,
   UploadIcon,
 } from "@primer/octicons-react";
-import {
-  useAppSelector,
-  useDate,
-  useFormat,
-  useToast,
-  useUserDetails,
-} from "@renderer/hooks";
-import { useTranslation } from "react-i18next";
-import { AxiosProgressEvent } from "axios";
+import { Button, CheckboxField } from "@renderer/components";
+import { DropdownMenu } from "@renderer/components/dropdown-menu/dropdown-menu";
+import { cloudSyncContext, gameDetailsContext } from "@renderer/context";
 import { formatDownloadProgress } from "@renderer/helpers";
-import { CloudSyncRenameArtifactModal } from "../cloud-sync-rename-artifact-modal/cloud-sync-rename-artifact-modal";
+import { useDate, useFormat, useToast } from "@renderer/hooks";
+import { useGoogleDrive } from "@renderer/hooks/use-google-drive";
+import { formatBytes } from "@shared";
 import { GameArtifact } from "@types";
+import { AxiosProgressEvent } from "axios";
 import { orderBy } from "lodash-es";
 import { MoreVertical } from "lucide-react";
-import { DropdownMenu } from "@renderer/components/dropdown-menu/dropdown-menu";
+import type { ChangeEvent } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Tooltip } from "react-tooltip";
+import { CloudSyncRenameArtifactModal } from "../cloud-sync-rename-artifact-modal/cloud-sync-rename-artifact-modal";
+import "./cloud-sync-panel.scss";
 
 interface CloudSyncPanelProps {
   automaticCloudSync: boolean;
@@ -50,10 +45,9 @@ export function CloudSyncPanel({
   );
 
   const { t } = useTranslation("game_details");
-  const { t: tHydraCloud } = useTranslation("hydra_cloud");
   const { formatDate, formatDateTime } = useDate();
   const { formatNumber } = useFormat();
-  const { hasActiveSubscription } = useUserDetails();
+  const { isDriveConnected } = useGoogleDrive();
 
   const {
     artifacts,
@@ -76,8 +70,7 @@ export function CloudSyncPanel({
 
   const { showSuccessToast, showErrorToast } = useToast();
 
-  const userDetails = useAppSelector((state) => state.userDetails.userDetails);
-  const backupsPerGameLimit = userDetails?.quirks?.backupsPerGameLimit ?? 0;
+  const backupsPerGameLimit = 0;
 
   const handleDeleteArtifactClick = async (gameArtifactId: string) => {
     setDeletingArtifact(true);
@@ -107,11 +100,11 @@ export function CloudSyncPanel({
   }, [objectId, shop]);
 
   useEffect(() => {
-    if (!hasActiveSubscription) return;
+    if (!isDriveConnected) return;
 
     getGameBackupPreview();
     getGameArtifacts();
-  }, [getGameArtifacts, getGameBackupPreview, hasActiveSubscription]);
+  }, [getGameArtifacts, getGameBackupPreview, isDriveConnected]);
 
   const handleBackupInstallClick = async (artifactId: string) => {
     setBackupDownloadProgress(null);
@@ -189,12 +182,12 @@ export function CloudSyncPanel({
   const disableActions =
     uploadingBackup || restoringBackup || deletingArtifact || freezingArtifact;
 
-  if (!hasActiveSubscription) {
+  if (!isDriveConnected) {
     return (
       <div className="cloud-sync-panel__upgrade">
-        <p>{tHydraCloud("hydra_cloud_feature_found")}</p>
-        <Button onClick={() => window.electron.openCheckout()}>
-          {tHydraCloud("learn_more")}
+        <p>{"Connect Google Drive to back up and restore saves."}</p>
+        <Button onClick={() => window.electron.connectGoogleDrive()}>
+          {"Connect Google Drive"}
         </Button>
       </div>
     );
@@ -224,7 +217,7 @@ export function CloudSyncPanel({
             </div>
           }
           checked={automaticCloudSync}
-          disabled={!hasActiveSubscription || !game?.executablePath}
+          disabled={!isDriveConnected || !game?.executablePath}
           onChange={onToggleAutomaticCloudSync}
         />
       </div>

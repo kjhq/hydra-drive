@@ -1,17 +1,36 @@
-import { CloudSync, logger, WindowManager, Wine } from "@main/services";
-import fs from "node:fs";
-import * as tar from "tar";
-import { registerEvent } from "../register-event";
-import axios from "axios";
-import path from "node:path";
-import { backupsPath, publicProfilePath } from "@main/constants";
+import { publicProfilePath } from "@main/constants";
+import { CloudSync, WindowManager, Wine } from "@main/services";
+import {
+  cloudSaveOperationGate,
+  cloudSaveOperationScopeKey,
+} from "@main/services/cloud-save/operation-gate";
+import { isGameRunning } from "@main/services/game-running-state";
+import {
+  extractLegacyArchive,
+  hashFile,
+  safeArchivePath,
+} from "@main/services/google-drive/archive";
+import { GoogleDriveAuth } from "@main/services/google-drive/auth";
+import { heads } from "@main/services/google-drive/model";
+import {
+  confirmOpaqueRestore,
+  finishOpaqueRestore,
+} from "@main/services/google-drive/opaque-saves";
+import {
+  restoreTransaction,
+  type RestoreChange,
+} from "@main/services/google-drive/restore-runtime";
+import { DriveSaveStore } from "@main/services/google-drive/store";
 import type { GameShop, LudusaviBackupMapping } from "@types";
+import fs from "node:fs";
+import path from "node:path";
+import { registerEvent } from "../register-event";
 
-import YAML from "yaml";
-import { addTrailingSlash, normalizePath } from "@main/helpers";
-import { SystemPath } from "@main/services/system-path";
+import { addTrailingSlash } from "@main/helpers";
 import { gamesSublevel, levelKeys } from "@main/level";
-import { requestGameArtifactDownload } from "./game-artifact-download";
+import { SystemPath } from "@main/services/system-path";
+import YAML from "yaml";
+import { downloadGameArtifactPayload } from "./game-artifact-download";
 
 export const transformLudusaviBackupPathIntoWindowsPath = (
   backupPath: string,
@@ -33,142 +52,121 @@ export const addWinePrefixToWindowsPath = (
   return path.join(winePrefixPath, windowsPath.replace("C:", "drive_c"));
 };
 
-const restoreLudusaviBackup = (
-  backupPath: string,
-  title: string,
-  homeDir: string,
-  winePrefixPath?: string | null,
-  artifactWinePrefixPath?: string | null
-) => {
-  const gameBackupPath = path.join(backupPath, title);
-  const mappingYamlPath = path.join(gameBackupPath, "mapping.yaml");
-
-  const data = fs.readFileSync(mappingYamlPath, "utf8");
-  const manifest = YAML.parse(data) as {
-    backups: LudusaviBackupMapping[];
-    drives: Record<string, string>;
-  };
-
-  const userProfilePath =
-    CloudSync.getWindowsLikeUserProfilePath(winePrefixPath);
-
-  manifest.backups.forEach((backup) => {
-    Object.keys(backup.files).forEach((key) => {
-      const sourcePathWithDrives = Object.entries(manifest.drives).reduce(
-        (prev, [driveKey, driveValue]) => {
-          return prev.replace(driveValue, driveKey);
-        },
-        key
-      );
-
-      const sourcePath = path.join(gameBackupPath, sourcePathWithDrives);
-
-      logger.info(`Source path: ${sourcePath}`);
-
-      const destinationPath = transformLudusaviBackupPathIntoWindowsPath(
-        key,
-        artifactWinePrefixPath
-      )
-        .replace(
-          homeDir,
-          addWinePrefixToWindowsPath(userProfilePath, winePrefixPath)
-        )
-        .replace(
-          publicProfilePath,
-          addWinePrefixToWindowsPath(publicProfilePath, winePrefixPath)
-        );
-
-      logger.info(`Moving ${sourcePath} to ${destinationPath}`);
-
-      fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
-
-      if (fs.existsSync(destinationPath)) {
-        fs.unlinkSync(destinationPath);
-      }
-
-      fs.renameSync(sourcePath, destinationPath);
-    });
-  });
-};
-
 const downloadGameArtifact = async (
   _event: Electron.IpcMainInvokeEvent,
   objectId: string,
   shop: GameShop,
   gameArtifactId: string
 ) => {
+  const session = GoogleDriveAuth.session();
+  const guard = async () => {
+    GoogleDriveAuth.assert(session);
+    if (isGameRunning(objectId, shop))
+      throw new Error("cloud_save_game_running");
+  };
+  await guard();
+  const directory = await fs.promises.mkdtemp(
+    path.join(SystemPath.getPath("temp"), "drive-legacy-restore-")
+  );
   try {
     const game = await gamesSublevel.get(levelKeys.game(shop, objectId));
-    const effectiveWinePrefixPath = Wine.getEffectivePrefixPath(
-      game?.winePrefixPath,
-      objectId
+    const prefix = Wine.getEffectivePrefixPath(game?.winePrefixPath, objectId);
+    const selection = await confirmOpaqueRestore(gameArtifactId);
+    const archive = path.join(directory, "backup.tar");
+    const commit = await downloadGameArtifactPayload(gameArtifactId, archive);
+    const preserved = await CloudSync.uploadSaveGame(
+      objectId,
+      shop,
+      null,
+      "Before restoring another snapshot"
     );
-
-    const {
-      downloadUrl,
-      objectKey,
-      homeDir,
-      winePrefixPath: artifactWinePrefixPath,
-    } = await requestGameArtifactDownload(gameArtifactId);
-
-    const zipLocation = path.join(SystemPath.getPath("userData"), objectKey);
-    const backupPath = path.join(backupsPath, `${shop}-${objectId}`);
-
-    if (fs.existsSync(backupPath)) {
-      fs.rmSync(backupPath, {
-        recursive: true,
-        force: true,
-      });
-    }
-
-    const response = await axios.get(downloadUrl, {
-      responseType: "stream",
-      onDownloadProgress: (progressEvent) => {
-        WindowManager.sendToAppWindows(
-          `on-backup-download-progress-${objectId}-${shop}`,
-          progressEvent
+    const expected = heads(
+      await new DriveSaveStore().records(selection.commit.identity)
+    ).map((c) => c.id);
+    if (
+      expected.some(
+        (id) => !selection.expected.includes(id) && id !== preserved.id
+      )
+    )
+      throw new Error("drive_conflict");
+    if (commit.identity.shop !== shop || commit.identity.objectId !== objectId)
+      throw new Error("drive_invalid_backup");
+    const content = path.join(directory, "content");
+    await extractLegacyArchive(archive, content);
+    if (!safeArchivePath(objectId) || objectId.includes("/"))
+      throw new Error("drive_invalid_backup");
+    const gameBackupPath = path.join(content, objectId);
+    const mapping = YAML.parse(
+      await fs.promises.readFile(
+        path.join(gameBackupPath, "mapping.yaml"),
+        "utf8"
+      )
+    ) as { backups: LudusaviBackupMapping[]; drives: Record<string, string> };
+    const home = String(commit.metadata.homeDir ?? "");
+    if (!home) throw new Error("drive_invalid_backup");
+    const changes: RestoreChange[] = [];
+    const roots = [
+      SystemPath.getPath("home"),
+      SystemPath.getPath("documents"),
+      SystemPath.getPath("appData"),
+      prefix,
+      game?.executablePath ? path.dirname(game.executablePath) : null,
+    ].filter((root): root is string => Boolean(root));
+    for (const backup of mapping.backups)
+      for (const original of Object.keys(backup.files)) {
+        const sourceName = Object.entries(mapping.drives).reduce(
+          (value, [key, drive]) => value.replace(drive, key),
+          original
         );
-      },
-    });
-
-    const writer = fs.createWriteStream(zipLocation);
-
-    response.data.pipe(writer);
-
-    writer.on("error", (err) => {
-      logger.error("Failed to write tar file", err);
-      throw err;
-    });
-
-    fs.mkdirSync(backupPath, { recursive: true });
-
-    writer.on("close", async () => {
-      await tar.x({
-        file: zipLocation,
-        cwd: backupPath,
-      });
-
-      restoreLudusaviBackup(
-        backupPath,
-        objectId,
-        normalizePath(homeDir),
-        effectiveWinePrefixPath,
-        artifactWinePrefixPath
-      );
-
-      WindowManager.sendToAppWindows(
-        `on-backup-download-complete-${objectId}-${shop}`,
-        true
-      );
-    });
-  } catch (err) {
-    logger.error("Failed to download game artifact", err);
-
+        const source = path.join(gameBackupPath, sourceName);
+        if (path.relative(gameBackupPath, source).startsWith(".."))
+          throw new Error("drive_invalid_backup");
+        const target = transformLudusaviBackupPathIntoWindowsPath(
+          original,
+          commit.metadata.winePrefixPath as string | null
+        )
+          .replace(
+            home,
+            addWinePrefixToWindowsPath(
+              CloudSync.getWindowsLikeUserProfilePath(prefix),
+              prefix
+            )
+          )
+          .replace(
+            publicProfilePath,
+            addWinePrefixToWindowsPath(publicProfilePath, prefix)
+          );
+        const root = roots.find((root) => {
+          const relative = path.relative(root, target);
+          return (
+            relative && !relative.startsWith("..") && !path.isAbsolute(relative)
+          );
+        });
+        if (!root) throw new Error("cloud_save_restore_paths_unresolved");
+        changes.push({ target, root, source, hash: await hashFile(source) });
+      }
+    await restoreTransaction(JSON.stringify([shop, objectId]), changes, guard);
+    await finishOpaqueRestore(gameArtifactId, expected, archive);
+    WindowManager.sendToAppWindows(
+      `on-backup-download-complete-${objectId}-${shop}`,
+      true
+    );
+  } catch (error) {
     WindowManager.sendToAppWindows(
       `on-backup-download-complete-${objectId}-${shop}`,
       false
     );
+    throw error;
+  } finally {
+    await fs.promises.rm(directory, { recursive: true, force: true });
   }
 };
-
-registerEvent("downloadGameArtifact", downloadGameArtifact);
+registerEvent(
+  "downloadGameArtifact",
+  (event, objectId: string, shop: GameShop, id: string) =>
+    cloudSaveOperationGate.runSync(
+      cloudSaveOperationScopeKey(objectId, shop),
+      "restore-legacy",
+      () => downloadGameArtifact(event, objectId, shop, id)
+    )
+);

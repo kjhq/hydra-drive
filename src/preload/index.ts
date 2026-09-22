@@ -3,77 +3,82 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { randomUUID } from "node:crypto";
 
+import type { AuthPage } from "@shared";
 import type {
-  GameShop,
-  DownloadProgress,
-  UserPreferences,
-  AppUpdaterEvent,
-  StartGameDownloadPayload,
-  GameRunning,
-  UpdateProfileRequest,
-  SeedingStatus,
-  UserAchievement,
-  Theme,
-  FriendRequestSync,
-  FriendPresenceSync,
-  NotificationSync,
-  ShortcutLocation,
-  CreateSteamShortcutOptions,
   AchievementCustomNotificationPosition,
   AchievementNotificationInfo,
   AchievementNotificationRequest,
-  ProtonVersion,
-  TorrentFilesResponse,
+  AchievementSouvenirSyncStatus,
+  AppUpdaterEvent,
+  ArtworkAssetType,
+  ArtworkKind,
+  ArtworkPage,
+  CloudSaveAutomaticSyncEvent,
+  CloudSaveAutomaticSyncModeChangedEvent,
+  CloudSaveConflictResolution,
+  CloudSaveCustomPathApproval,
+  CloudSaveModalSyncResult,
+  CloudSaveOverview,
+  CloudSaveSyncIpcProgressPayload,
+  CloudSaveSyncProgressPayload,
+  CloudSaveV2FileDetails,
+  ConfirmCloudSaveCustomPathApprovalResult,
+  ConfirmCloudSaveCustomPathRebindApprovalResult,
+  CreateSteamShortcutOptions,
   DownloadLayoutState,
-  EmulatorSystem,
-  EmulatorBinary,
-  EmulatorInstallProgress,
-  RetroArchCoreName,
-  RetroArchCoreInstallProgress,
-  RetroArchInstallProgress,
-  Ps2MemcardScanInput,
-  Ps2MemcardScanProgress,
-  Ps2MemoryCardSaveRecord,
-  Ps2ExportResult,
+  DownloadProgress,
+  DriveBackupSummary,
+  DrivePrompt,
+  DriveQueueSummary,
+  DriveSaveIdentity,
   EmulationBackupProgress,
   EmulationCloudSave,
   EmulationSaveMetadata,
   EmulationSavePlatform,
-  MemcardFormatState,
-  MemcardRestoreResult,
-  MemcardRestoreTarget,
-  ArtworkAssetType,
-  ArtworkKind,
-  ArtworkPage,
+  EmulatorBinary,
+  EmulatorInstallProgress,
+  EmulatorSystem,
+  ExtractionFailure,
+  FriendPresenceSync,
+  FriendRequestSync,
   GameArtworkSelection,
   GameLauncherStatusPayload,
-  CloudSaveAutomaticSyncModeChangedEvent,
-  CloudSaveAutomaticSyncEvent,
-  CloudSaveConflictResolution,
-  CloudSaveOverview,
-  CloudSaveV2FileDetails,
-  CloudSaveSyncIpcProgressPayload,
-  CloudSaveSyncProgressPayload,
-  SyncCloudSaveOnGamePageResult,
-  SyncGameCloudSaveResult,
-  SelectCloudSaveCustomPathResult,
-  CloudSaveCustomPathApproval,
-  CloudSaveModalSyncResult,
-  SelectCloudSaveCustomPathApprovalResult,
-  ConfirmCloudSaveCustomPathApprovalResult,
-  ConfirmCloudSaveCustomPathRebindApprovalResult,
+  GameRunning,
+  GameShop,
+  GoogleDriveConnection,
   LegacySaveExportIpcProgress,
   LegacySaveExportProgress,
   LegacySaveExportResult,
+  MemcardFormatState,
+  MemcardRestoreResult,
+  MemcardRestoreTarget,
+  NotificationSync,
   OpenCheckoutOptions,
-  AchievementSouvenirSyncStatus,
-  SteamSyncState,
+  ProtonVersion,
+  Ps2ExportResult,
+  Ps2MemcardScanInput,
+  Ps2MemcardScanProgress,
+  Ps2MemoryCardSaveRecord,
+  RetroArchCoreInstallProgress,
+  RetroArchCoreName,
+  RetroArchInstallProgress,
+  SeedingStatus,
+  SelectCloudSaveCustomPathApprovalResult,
+  SelectCloudSaveCustomPathResult,
+  ShortcutLocation,
+  StartGameDownloadPayload,
+  SteamConnectErrorCode,
   SteamSyncFinishedPayload,
   SteamSyncRunStatus,
-  SteamConnectErrorCode,
-  ExtractionFailure,
+  SteamSyncState,
+  SyncCloudSaveOnGamePageResult,
+  SyncGameCloudSaveResult,
+  Theme,
+  TorrentFilesResponse,
+  UpdateProfileRequest,
+  UserAchievement,
+  UserPreferences,
 } from "@types";
-import type { AuthPage } from "@shared";
 import type { AxiosProgressEvent } from "axios";
 
 const fileExplorerApi = {
@@ -133,6 +138,56 @@ const invokeGameArtifactExport = async (
 };
 
 contextBridge.exposeInMainWorld("electron", {
+  getDrivePrompt: (): Promise<DrivePrompt | null> =>
+    ipcRenderer.invoke("getDrivePrompt"),
+  answerDrivePrompt: (id: string, accepted: boolean): Promise<void> =>
+    ipcRenderer.invoke("answerDrivePrompt", id, accepted),
+  onDrivePromptChanged: (callback: (prompt: DrivePrompt | null) => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      prompt: DrivePrompt | null
+    ) => callback(prompt);
+    ipcRenderer.on("drive-prompt-changed", listener);
+    return () => ipcRenderer.removeListener("drive-prompt-changed", listener);
+  },
+  importLocalHydraSettings: () =>
+    ipcRenderer.invoke("importLocalHydraSettings"),
+  getGoogleDriveConnection: (): Promise<GoogleDriveConnection> =>
+    ipcRenderer.invoke("getGoogleDriveConnection"),
+  connectGoogleDrive: (): Promise<GoogleDriveConnection> =>
+    ipcRenderer.invoke("connectGoogleDrive"),
+  disconnectGoogleDrive: (): Promise<GoogleDriveConnection> =>
+    ipcRenderer.invoke("disconnectGoogleDrive"),
+  onGoogleDriveConnectionChanged: (
+    callback: (connection: GoogleDriveConnection) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      value: GoogleDriveConnection
+    ) => callback(value);
+    ipcRenderer.on("google-drive-connection-changed", listener);
+    return () =>
+      ipcRenderer.removeListener("google-drive-connection-changed", listener);
+  },
+  getDriveBackupHistory: (
+    identity: DriveSaveIdentity
+  ): Promise<DriveBackupSummary[]> =>
+    ipcRenderer.invoke("getDriveBackupHistory", identity),
+  getDriveSaveQueue: (): Promise<DriveQueueSummary[]> =>
+    ipcRenderer.invoke("getDriveSaveQueue"),
+  retryDriveSaveQueue: (): Promise<void> =>
+    ipcRenderer.invoke("retryDriveSaveQueue"),
+  restoreDriveBackup: (id: string, expectedHeads: string[]): Promise<void> =>
+    ipcRenderer.invoke("restoreDriveBackup", id, expectedHeads),
+  exportDriveBackup: (id: string): Promise<void> =>
+    ipcRenderer.invoke("exportDriveBackup", id),
+  updateDriveBackup: (
+    id: string,
+    values: { label?: string; pinned?: boolean }
+  ): Promise<void> => ipcRenderer.invoke("updateDriveBackup", id, values),
+  deleteDriveBackup: (id: string): Promise<void> =>
+    ipcRenderer.invoke("deleteDriveBackup", id),
+
   onCloudSaveAutomaticSyncModeChanged: (
     callback: (event: CloudSaveAutomaticSyncModeChangedEvent) => void
   ) => {
@@ -289,11 +344,12 @@ contextBridge.exposeInMainWorld("electron", {
     objectId: string,
     shop: GameShop,
     resolution: CloudSaveConflictResolution,
-    onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+    onProgress?: (progress: CloudSaveSyncProgressPayload) => void,
+    expectedHeadIds?: string[]
   ) =>
     invokeCloudSaveOperation(
       "resolveCloudSaveConflict",
-      [objectId, shop, resolution],
+      [objectId, shop, resolution, expectedHeadIds],
       onProgress
     ),
   /* Torrenting */

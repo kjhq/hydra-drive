@@ -1,6 +1,6 @@
 import type { SteamConnectErrorCode } from "@types";
 
-export const STEAM_CONNECTED_DEEP_LINK = "hydralauncher://steam-connected";
+export const STEAM_CONNECTED_DEEP_LINK = "hydradrive://steam-connected";
 
 export type SteamOpenIdReturn =
   | { kind: "success" }

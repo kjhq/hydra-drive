@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 type CloudSaveOperationKind = "sync" | "delete";
 
 interface ActiveCloudSaveOperation {
@@ -7,6 +8,7 @@ interface ActiveCloudSaveOperation {
 }
 
 export class CloudSaveOperationGate {
+  private readonly launchContext = new AsyncLocalStorage<string>();
   private readonly active = new Map<string, ActiveCloudSaveOperation>();
   private readonly activeLaunches = new Map<string, number>();
 
@@ -20,7 +22,11 @@ export class CloudSaveOperationGate {
     operation: () => Promise<T>,
     assertCanStart?: () => Promise<void>
   ): Promise<T> {
-    if (this.active.has(scopeKey)) {
+    if (
+      this.active.has(scopeKey) ||
+      ((this.activeLaunches.get(scopeKey) ?? 0) > 0 &&
+        this.launchContext.getStore() !== scopeKey)
+    ) {
       return Promise.reject(new Error("cloud_save_operation_active"));
     }
 
@@ -62,12 +68,17 @@ export class CloudSaveOperationGate {
       return Promise.reject(new Error("cloud_save_delete_active"));
     }
 
+    if (
+      this.active.has(scopeKey) ||
+      (this.activeLaunches.get(scopeKey) ?? 0) > 0
+    )
+      return Promise.reject(new Error("cloud_save_operation_active"));
     this.activeLaunches.set(
       scopeKey,
       (this.activeLaunches.get(scopeKey) ?? 0) + 1
     );
     return Promise.resolve()
-      .then(operation)
+      .then(() => this.launchContext.run(scopeKey, operation))
       .finally(() => {
         const remaining = (this.activeLaunches.get(scopeKey) ?? 1) - 1;
         if (remaining === 0) this.activeLaunches.delete(scopeKey);
@@ -82,7 +93,7 @@ export class CloudSaveOperationGate {
     operation: () => Promise<T>
   ): Promise<T> {
     const promise = Promise.resolve()
-      .then(operation)
+      .then(() => this.launchContext.run(scopeKey, operation))
       .finally(() => {
         if (this.active.get(scopeKey)?.promise === promise) {
           this.active.delete(scopeKey);

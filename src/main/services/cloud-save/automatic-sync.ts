@@ -1,3 +1,4 @@
+import { gamesSublevel, levelKeys } from "@main/level";
 import type {
   CloudSaveAutomaticSyncEvent,
   CloudSaveAutomaticSyncTrigger,
@@ -5,17 +6,24 @@ import type {
   GameShop,
   SyncGameCloudSaveResult,
 } from "@types";
-import { gamesSublevel, levelKeys } from "@main/level";
 
-import { HydraApi } from "../hydra-api";
 import { isGameRunning } from "../game-running-state";
+import { GoogleDriveAuth } from "../google-drive/auth";
 import { logger } from "../logger";
 import { WindowManager } from "../window-manager";
+import {
+  beginAutomaticSyncObservation,
+  finishAutomaticSyncObservation,
+} from "./automatic-sync-observation";
+import {
+  classifyAutomaticCloudSaveFailure,
+  getPendingDeletionAutomaticSyncOutcome,
+  type AutomaticCloudSaveSyncOutcome,
+} from "./automatic-sync-outcome";
 import { getCloudSaveAutomaticSyncEnabled } from "./automatic-sync-settings";
 import { canAccessCloudSaves } from "./cloud-save-access";
-import { syncGameCloudSave } from "./sync-game-cloud-save";
-import { getCloudSaveGameContext } from "./cloud-save-game-context";
 import { getCloudSaveErrorDetails } from "./cloud-save-error-details";
+import { getCloudSaveGameContext } from "./cloud-save-game-context";
 import { isCloudSaveEnvironmentChangedError } from "./environment-guard";
 import { isCloudSaveExecutableMissingError } from "./executable-path-guard";
 import {
@@ -23,16 +31,8 @@ import {
   consumeCloudSaveLaunchGuard,
 } from "./launch-guard";
 import { CloudSaveOperationCoordinator } from "./operation-coordinator";
-import {
-  classifyAutomaticCloudSaveFailure,
-  getPendingDeletionAutomaticSyncOutcome,
-  type AutomaticCloudSaveSyncOutcome,
-} from "./automatic-sync-outcome";
 import { isCloudSaveDeletionPending } from "./pending-deletion";
-import {
-  beginAutomaticSyncObservation,
-  finishAutomaticSyncObservation,
-} from "./automatic-sync-observation";
+import { syncGameCloudSave } from "./sync-game-cloud-save";
 
 const automaticSyncCoordinator =
   new CloudSaveOperationCoordinator<AutomaticCloudSaveSyncOutcome>();
@@ -62,8 +62,8 @@ export const canRunAutomaticCloudSaveSync = async (
   if (
     shop !== "steam" ||
     !canAccessCloudSaves(
-      HydraApi.isLoggedIn(),
-      HydraApi.hasActiveSubscription()
+      GoogleDriveAuth.isConnected(),
+      GoogleDriveAuth.isConnected()
     ) ||
     (await isPendingDeletionBlockingAutomaticSync(objectId, shop)) ||
     !(await getCloudSaveAutomaticSyncEnabled(objectId, shop))
@@ -91,8 +91,8 @@ export const runAutomaticCloudSaveSyncDetailed = async (
   if (
     shop !== "steam" ||
     !canAccessCloudSaves(
-      HydraApi.isLoggedIn(),
-      HydraApi.hasActiveSubscription()
+      GoogleDriveAuth.isConnected(),
+      GoogleDriveAuth.isConnected()
     )
   ) {
     return { status: "skipped", result: null };
@@ -287,7 +287,10 @@ export const runAutomaticCloudSaveSyncDetailed = async (
               : undefined,
         });
         return {
-          status: classifyAutomaticCloudSaveFailure(trigger, latestStage),
+          status:
+            trigger === "pre-launch"
+              ? "failed"
+              : classifyAutomaticCloudSaveFailure(trigger, latestStage),
           result: null,
           errorCode:
             typeof errorDetails.errorCode === "string"
@@ -322,13 +325,16 @@ export const runAutomaticCloudSavePostExit = async (
   const guard = consumeCloudSaveLaunchGuard(objectId, shop);
   if (
     !canAccessCloudSaves(
-      HydraApi.isLoggedIn(),
-      HydraApi.hasActiveSubscription()
+      GoogleDriveAuth.isConnected(),
+      GoogleDriveAuth.isConnected()
     )
   ) {
     return null;
   }
-  if (!guard?.uploadAllowed) {
+  if (
+    !guard?.uploadAllowed ||
+    guard.accountId !== GoogleDriveAuth.status().account?.id
+  ) {
     logger.warn("[Cloud Save] Post-exit upload blocked by launch guard", {
       shop,
       objectId,

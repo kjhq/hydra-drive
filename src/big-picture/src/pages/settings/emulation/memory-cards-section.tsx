@@ -8,6 +8,7 @@ import {
   TrashIcon,
   UploadIcon,
 } from "@primer/octicons-react";
+import { useGoogleDrive } from "@renderer/hooks/use-google-drive";
 import type {
   EmulationSavePlatform,
   EmulatorConfig,
@@ -20,6 +21,11 @@ import type {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { getSkuRegion, getSkuRegionFlag } from "@renderer/helpers";
+import {
+  resolveCardBackupProgress,
+  useEmulationBackupProgress,
+} from "@renderer/hooks/use-emulation-backup-progress";
 import {
   Button,
   ContextMenu,
@@ -30,16 +36,7 @@ import {
   VerticalFocusGroup,
 } from "../../../components";
 import { ConfirmationModal } from "../../../components/modals";
-import {
-  useBigPictureToast,
-  useNavigation,
-  useUserDetails,
-} from "../../../hooks";
-import { getSkuRegion, getSkuRegionFlag } from "@renderer/helpers";
-import {
-  resolveCardBackupProgress,
-  useEmulationBackupProgress,
-} from "@renderer/hooks/use-emulation-backup-progress";
+import { useBigPictureToast, useNavigation } from "../../../hooks";
 import {
   EMULATION_DETAIL_MEMORY_CARDS_DETECT_BUTTON_ID,
   EMULATION_DETAIL_MEMORY_CARDS_PICK_BUTTON_ID,
@@ -365,7 +362,7 @@ export function MemoryCardsSection({
   onUploaded,
 }: Readonly<MemoryCardsSectionProps>) {
   const { t } = useTranslation("settings");
-  const { hasActiveSubscription } = useUserDetails();
+  const { isDriveConnected } = useGoogleDrive();
   const { showSuccessToast, showErrorToast } = useBigPictureToast();
   const isPs1 = config.system === "ps1";
   const api = isPs1 ? ps1Api : ps2Api;
@@ -610,7 +607,7 @@ export function MemoryCardsSection({
                       id={collapseId}
                       navigationOverrides={{
                         left: { type: "block" },
-                        right: hasActiveSubscription
+                        right: isDriveConnected
                           ? {
                               type: "item",
                               itemId: backupAllId,
@@ -685,7 +682,7 @@ export function MemoryCardsSection({
                       </button>
                     </FocusItem>
 
-                    {hasActiveSubscription ? (
+                    {isDriveConnected ? (
                       <FocusItem
                         id={backupAllId}
                         navigationOverrides={{
@@ -760,9 +757,7 @@ export function MemoryCardsSection({
                       focusNavigationOverrides={{
                         left: {
                           type: "item",
-                          itemId: hasActiveSubscription
-                            ? backupAllId
-                            : collapseId,
+                          itemId: isDriveConnected ? backupAllId : collapseId,
                         },
                         right: { type: "block" },
                         up: previousGroup
@@ -963,7 +958,7 @@ export function MemoryCardsSection({
                                       ? t("cloud_backing_up")
                                       : t("cloud_backup"),
                                   disabled:
-                                    !hasActiveSubscription ||
+                                    !isDriveConnected ||
                                     backingUpKey === currentKey,
                                   onSelect: () => handleBackup(save),
                                 },

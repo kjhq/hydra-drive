@@ -1,9 +1,29 @@
+import {
+  copyVerified,
+  hashFile,
+  safeArchivePath,
+} from "@main/services/google-drive/archive";
+import { GoogleDriveAuth } from "@main/services/google-drive/auth";
+import {
+  assertEmulatorsStopped,
+  withEmulatorSaveLock,
+} from "@main/services/google-drive/emulator-restore-guard";
+import { heads, type DriveCommit } from "@main/services/google-drive/model";
+import {
+  confirmOpaqueRestore,
+  finishOpaqueRestore,
+  publishOpaque,
+} from "@main/services/google-drive/opaque-saves";
+import {
+  restoreTransaction,
+  type RestoreChange,
+} from "@main/services/google-drive/restore-runtime";
+import { DriveSaveStore } from "@main/services/google-drive/store";
+import { app, shell } from "electron";
 import { randomUUID } from "node:crypto";
 import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
-import { shell } from "electron";
 
-import { registerEvent } from "../register-event";
 import { emulators, logger } from "@main/services";
 import { SevenZip } from "@main/services/7zip";
 import type {
@@ -13,6 +33,7 @@ import type {
   MemcardRestoreTarget,
 } from "@types";
 import { getDownloadsPath } from "../helpers/get-downloads-path";
+import { registerEvent } from "../register-event";
 
 type EmulationSaveMetadataInput =
   | EmulationSaveMetadata
@@ -170,10 +191,31 @@ const restorePpssppSave = async (
     ) {
       throw new Error("The PPSSPP save archive has an invalid layout");
     }
-    await SevenZip.extractFile({
-      filePath: archivePath,
-      outputPath: extractionPath,
-    });
+    const listed = await SevenZip.listEntries(archivePath);
+    let expanded = 0;
+    const names = new Set<string>();
+    for (const entry of listed) {
+      expanded += entry.size;
+      const name = entry.name.replaceAll("\\", "/");
+      if (
+        !safeArchivePath(name) ||
+        names.has(name.toLowerCase()) ||
+        entry.encrypted ||
+        expanded > 512 * 1024 * 1024
+      )
+        throw new Error("drive_invalid_backup");
+      names.add(name.toLowerCase());
+      const destination = path.join(extractionPath, name);
+      await fs.mkdir(path.dirname(destination), { recursive: true });
+      const content = await SevenZip.readEntry(
+        archivePath,
+        entry.name,
+        Math.max(1, entry.size)
+      );
+      if (content.length !== entry.size)
+        throw new Error("drive_invalid_backup");
+      await fs.writeFile(destination, content, { flag: "wx" });
+    }
 
     const wrappedPath = path.join(extractionPath, metadata.savedataDirectory);
     const wrappedStat = await fs.stat(wrappedPath);
@@ -288,18 +330,18 @@ const restoreWiiSaveExport = async (
   return outputPath;
 };
 
-const FILE_SAVE_PLATFORMS = new Set<EmulationSavePlatform>([
-  "psp",
-  "gamecube",
-  "wii",
-]);
-
 const assertValidRestoreDestination = async (
   platform: EmulationSavePlatform,
   metadata: EmulationSaveMetadataInput,
   targetCardFilePath: string
 ): Promise<void> => {
-  if (!FILE_SAVE_PLATFORMS.has(platform)) return;
+  // PS1/PS2 also support a card selected explicitly in the file picker.
+  // Conversion validates the existing card before the staged copy is installed.
+  if (platform === "ps1" || platform === "ps2") {
+    if (!path.isAbsolute(targetCardFilePath))
+      throw new Error("Invalid memory card path");
+    return;
+  }
   const allowedTargets = await restoreTargets(platform, metadata);
   const isAllowed = allowedTargets.some(
     (target) => target.cardFilePath === targetCardFilePath
@@ -372,6 +414,68 @@ const restoreMemoryCardSave = async (
   return { ok: result.ok, error: result.error, reason: result.reason };
 };
 
+async function preserveLocalSave(
+  commit: DriveCommit,
+  platform: EmulationSavePlatform,
+  target: string,
+  metadata: EmulationSaveMetadataInput,
+  sourceFileName?: string
+) {
+  const directory = await fs.mkdtemp(
+    path.join(app.getPath("temp"), "drive-preserve-emulator-")
+  );
+  try {
+    let buffer: Buffer | undefined;
+    const identity = String(commit.metadata.saveIdentity ?? "");
+    if (platform === "ps2") {
+      const contents = await emulators.readSaveContents(target, identity);
+      if (contents) buffer = emulators.buildPsuBuffer(contents);
+    } else if (platform === "ps1") {
+      const contents = await emulators.readPs1SaveContents(target, identity);
+      if (contents) buffer = emulators.buildMcsBuffer(contents);
+    } else if (platform === "gamecube" && isGamecubeMetadata(metadata)) {
+      const name =
+        sourceFileName &&
+        path.basename(sourceFileName) === sourceFileName &&
+        sourceFileName.toLowerCase().endsWith(".gci")
+          ? sourceFileName
+          : `${metadata.gameId}-${metadata.internalFileName.replace(/[^A-Za-z0-9._-]/g, "_")}.gci`;
+      buffer = await fs.readFile(path.join(target, name)).catch((error) => {
+        if (error.code === "ENOENT") return undefined;
+        throw error;
+      });
+    } else if (platform === "psp" && isPspMetadata(metadata)) {
+      const local = path.join(target, metadata.savedataDirectory);
+      if (existsSync(local)) {
+        const staging = path.join(directory, "local");
+        await fs.mkdir(staging);
+        await fs.cp(local, path.join(staging, metadata.savedataDirectory), {
+          recursive: true,
+          filter: async (file) => {
+            if ((await fs.lstat(file)).isSymbolicLink())
+              throw new Error("drive_invalid_backup");
+            return true;
+          },
+        });
+        const zip = path.join(directory, "local.zip");
+        await SevenZip.createZip({ sourcePath: staging, destinationPath: zip });
+        buffer = await fs.readFile(zip);
+      }
+    }
+    if (!buffer) return null;
+    const source = path.join(directory, "save");
+    await fs.writeFile(source, buffer);
+    return await publishOpaque(
+      commit.identity,
+      source,
+      "Before restoring another snapshot",
+      commit.metadata
+    );
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+}
+
 // Download the cloud save and write it back into the chosen local card.
 const restoreEmulationSave = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -382,17 +486,143 @@ const restoreEmulationSave = async (
   sourceFileName?: string
 ): Promise<MemcardRestoreResult> => {
   try {
-    await assertValidRestoreDestination(platform, metadata, targetCardFilePath);
-    const bytes = await emulators.downloadEmulationSaveBytes(saveId);
-    const fileSaveResult = await restoreFileSave(
-      platform,
-      bytes,
-      targetCardFilePath,
-      metadata,
-      sourceFileName
-    );
-    if (fileSaveResult) return fileSaveResult;
-    return restoreMemoryCardSave(platform, bytes, targetCardFilePath, saveId);
+    return await withEmulatorSaveLock(async () => {
+      const session = GoogleDriveAuth.session();
+      const guard = async () => {
+        GoogleDriveAuth.assert(session);
+        await assertEmulatorsStopped();
+      };
+      await guard();
+      const selection = await confirmOpaqueRestore(saveId);
+      if (
+        selection.commit.identity.kind !== "emulator" ||
+        selection.commit.metadata.platform !== platform
+      )
+        throw new Error("drive_invalid_backup");
+      metadata = (selection.commit.metadata.metadata ??
+        null) as EmulationSaveMetadataInput;
+      sourceFileName = String(selection.commit.metadata.fileName ?? "");
+      await assertValidRestoreDestination(
+        platform,
+        metadata,
+        targetCardFilePath
+      );
+      await guard();
+      const bytes = await emulators.downloadEmulationSaveBytes(saveId);
+      const preserved = await preserveLocalSave(
+        selection.commit,
+        platform,
+        targetCardFilePath,
+        metadata,
+        sourceFileName
+      );
+      const expected = heads(
+        await new DriveSaveStore().records(selection.commit.identity)
+      ).map((c) => c.id);
+      if (
+        expected.some(
+          (id) => !selection.expected.includes(id) && id !== preserved?.id
+        )
+      )
+        throw new Error("drive_conflict");
+      await guard();
+      if (platform === "wii")
+        return (await restoreFileSave(
+          platform,
+          bytes,
+          targetCardFilePath,
+          metadata,
+          sourceFileName
+        ))!;
+      const directory = await fs.mkdtemp(
+        path.join(app.getPath("temp"), "drive-emulator-stage-")
+      );
+      try {
+        if (platform === "ps1" || platform === "ps2") {
+          const staged = path.join(
+            directory,
+            path.basename(targetCardFilePath)
+          );
+          await copyVerified(targetCardFilePath, staged);
+          const result = await restoreMemoryCardSave(
+            platform,
+            bytes,
+            staged,
+            saveId
+          );
+          if (!result.ok) return result;
+          await restoreTransaction(
+            "emulator",
+            [
+              {
+                target: targetCardFilePath,
+                root: path.dirname(targetCardFilePath),
+                source: staged,
+                hash: await hashFile(staged),
+              },
+            ],
+            guard
+          );
+          await finishOpaqueRestore(saveId, expected, bytes);
+          return result;
+        }
+        const stagedRoot = path.join(directory, "staged");
+        const result = await restoreFileSave(
+          platform,
+          bytes,
+          stagedRoot,
+          metadata,
+          sourceFileName
+        );
+        if (!result) throw new Error("drive_invalid_backup");
+        const changes: RestoreChange[] = [];
+        const collect = async (root: string, relative = ""): Promise<void> => {
+          for (const entry of await fs.readdir(path.join(root, relative), {
+            withFileTypes: true,
+          })) {
+            if (entry.isSymbolicLink()) throw new Error("drive_invalid_backup");
+            const name = path.join(relative, entry.name);
+            if (entry.isDirectory()) await collect(root, name);
+            else if (entry.isFile())
+              changes.push({
+                target: path.join(targetCardFilePath, name),
+                root: targetCardFilePath,
+                source: path.join(root, name),
+                hash: await hashFile(path.join(root, name)),
+              });
+            else throw new Error("drive_invalid_backup");
+          }
+        };
+        await collect(stagedRoot);
+        if (platform === "psp" && isPspMetadata(metadata)) {
+          const existing = path.join(
+            targetCardFilePath,
+            metadata.savedataDirectory
+          );
+          const removed = async (root: string): Promise<void> => {
+            for (const entry of await fs
+              .readdir(root, { withFileTypes: true })
+              .catch((error) => {
+                if (error.code === "ENOENT") return [];
+                throw error;
+              })) {
+              const target = path.join(root, entry.name);
+              if (entry.isSymbolicLink())
+                throw new Error("drive_invalid_backup");
+              if (entry.isDirectory()) await removed(target);
+              else if (!changes.some((change) => change.target === target))
+                changes.push({ target, root: targetCardFilePath });
+            }
+          };
+          await removed(existing);
+        }
+        await restoreTransaction("emulator", changes, guard);
+        await finishOpaqueRestore(saveId, expected, bytes);
+        return result;
+      } finally {
+        await fs.rm(directory, { recursive: true, force: true });
+      }
+    });
   } catch (err) {
     logger.error("Failed to restore emulation save", err);
     return {

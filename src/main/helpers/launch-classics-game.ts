@@ -1,8 +1,7 @@
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import path from "node:path";
 import { db, gamesSublevel, levelKeys } from "@main/level";
 import { emulators, logger } from "@main/services";
+import { cleanupEmulatorSouvenirSession } from "@main/services/emulators/emulator-souvenir-config";
+import { prepareEmulatorSouvenirs } from "@main/services/emulators/prepare-emulator-souvenirs";
 import type {
   EmulatorBinary,
   EmulatorConfig,
@@ -11,12 +10,14 @@ import type {
   GameShop,
   UserPreferences,
 } from "@types";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { withEmulatorSaveLock } from "../services/google-drive/emulator-restore-guard";
 import { isGamemodeAvailable } from "./is-gamemode-available";
 import { isMangohudAvailable } from "./is-mangohud-available";
 import { resolveLaunchCommand } from "./resolve-launch-command";
 import { spawnDetachedEmulator } from "./spawn-detached-emulator";
-import { prepareEmulatorSouvenirs } from "@main/services/emulators/prepare-emulator-souvenirs";
-import { cleanupEmulatorSouvenirSession } from "@main/services/emulators/emulator-souvenir-config";
 
 export class EmulatorNotConfiguredError extends Error {
   code = "EMULATOR_NOT_CONFIGURED" as const;
@@ -178,7 +179,7 @@ export const resolveEmulatorWrappers = (
   ];
 };
 
-export const launchClassicsGame = async (
+const launchClassicsGameUnlocked = async (
   options: LaunchClassicsGameOptions
 ): Promise<void> => {
   const { shop, objectId, discPath, system } = options;
@@ -287,3 +288,6 @@ export const launchClassicsGame = async (
     throw error;
   }
 };
+
+export const launchClassicsGame = (options: LaunchClassicsGameOptions) =>
+  withEmulatorSaveLock(() => launchClassicsGameUnlocked(options));

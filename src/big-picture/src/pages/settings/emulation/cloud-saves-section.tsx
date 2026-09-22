@@ -8,6 +8,7 @@ import {
   SyncIcon,
   TrashIcon,
 } from "@primer/octicons-react";
+import { useGoogleDrive } from "@renderer/hooks/use-google-drive";
 import type {
   EmulationCloudSave,
   EmulationSavePlatform,
@@ -26,18 +27,14 @@ import {
   VerticalFocusGroup,
 } from "../../../components";
 import { ConfirmationModal } from "../../../components/modals";
-import {
-  useBigPictureToast,
-  useNavigation,
-  useUserDetails,
-} from "../../../hooks";
+import { useBigPictureToast, useNavigation } from "../../../hooks";
 import {
   EMULATION_DETAIL_CLOUD_REFRESH_BUTTON_ID,
   EMULATION_DETAIL_CLOUD_SAVES_REGION_ID,
   getEmulationCloudMenuFocusId,
 } from "../settings-navigation";
-import { SETTINGS_TOAST_OPTIONS } from "./shared";
 import { EmulationCloudRestoreModal } from "./emulation-cloud-restore-modal";
+import { SETTINGS_TOAST_OPTIONS } from "./shared";
 
 import { useCloudConnector } from "@renderer/hooks/use-cloud-connector";
 
@@ -221,7 +218,7 @@ export function CloudSavesSection({
   upTargetId,
 }: Readonly<CloudSavesSectionProps>) {
   const { t } = useTranslation("settings");
-  const { hasActiveSubscription } = useUserDetails();
+  const { isDriveConnected } = useGoogleDrive();
   const { showSuccessToast } = useBigPictureToast();
   const platforms = useMemo<EmulationSavePlatform[]>(
     () =>
@@ -249,7 +246,7 @@ export function CloudSavesSection({
   const { stageRef, consoleRef, gridRef, connector } = useCloudConnector(saves);
 
   const loadSaves = useCallback(async () => {
-    if (!hasActiveSubscription) {
+    if (!isDriveConnected) {
       setSaves([]);
       return;
     }
@@ -266,7 +263,7 @@ export function CloudSavesSection({
     } finally {
       setIsRefreshing(false);
     }
-  }, [hasActiveSubscription, platforms]);
+  }, [isDriveConnected, platforms]);
 
   useEffect(() => {
     void loadSaves();
@@ -281,7 +278,7 @@ export function CloudSavesSection({
     await loadSaves();
   }, [deleteTarget, loadSaves, showSuccessToast]);
 
-  if (!hasActiveSubscription || saves.length === 0) {
+  if (!isDriveConnected || saves.length === 0) {
     return null;
   }
 

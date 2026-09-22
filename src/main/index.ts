@@ -1,3 +1,16 @@
+import { electronApp, optimizer } from "@electron-toolkit/utils";
+import resources from "@locales";
+import {
+  clearGamesPlaytime,
+  DownloadOrchestrator,
+  emulators,
+  Lock,
+  logger,
+  PowerSaveBlockerManager,
+  SSEClient,
+  WindowManager,
+} from "@main/services";
+import { GameShop, UserPreferences } from "@types";
 import {
   app,
   BrowserWindow,
@@ -10,35 +23,23 @@ import updater from "electron-updater";
 import i18n from "i18next";
 import path from "node:path";
 import url from "node:url";
-import { electronApp, optimizer } from "@electron-toolkit/utils";
-import {
-  logger,
-  clearGamesPlaytime,
-  WindowManager,
-  Lock,
-  PowerSaveBlockerManager,
-  DownloadOrchestrator,
-  SSEClient,
-  emulators,
-} from "@main/services";
-import resources from "@locales";
-import { TorrentService } from "./services/torrent-service";
-import { db, gamesSublevel, levelKeys } from "./level";
-import { GameShop, UserPreferences } from "@types";
+import { lookupCachedPlatform } from "./events/library/get-library";
 import { launchGame, openClassicsGame } from "./helpers";
 import { refreshPortableShortcutLauncher } from "./helpers/shortcut-launch";
-import { lookupCachedPlatform } from "./events/library/get-library";
+import { db, gamesSublevel, levelKeys } from "./level";
 import { loadState } from "./main";
-import {
-  closeSteamOpenIdWindow,
-  notifySteamConnectError,
-  notifySteamConnected,
-} from "./services/steam-integration/steam-store-session";
 import {
   completeSteamOpenIdConnection,
   parseSteamOpenIdReturn,
 } from "./services/steam-integration/steam-openid-return";
+import {
+  closeSteamOpenIdWindow,
+  notifySteamConnected,
+  notifySteamConnectError,
+} from "./services/steam-integration/steam-store-session";
 import { steamSyncOrchestrator } from "./services/steam-integration/steam-sync-orchestrator";
+import { SystemPath } from "./services/system-path";
+import { TorrentService } from "./services/torrent-service";
 
 crashReporter.start({
   uploadToServer: false,
@@ -46,14 +47,27 @@ crashReporter.start({
 
 const { autoUpdater } = updater;
 
-autoUpdater.setFeedURL({
-  provider: "github",
-  owner: "hydralauncher",
-  repo: "hydra",
-});
+const releaseOwner = import.meta.env.MAIN_VITE_RELEASE_OWNER?.trim();
+const releaseRepo = import.meta.env.MAIN_VITE_RELEASE_REPO?.trim();
+if (
+  releaseOwner &&
+  releaseRepo &&
+  !(
+    releaseOwner.toLowerCase() === "hydralauncher" &&
+    releaseRepo.toLowerCase() === "hydra"
+  )
+) {
+  autoUpdater.setFeedURL({
+    provider: "github",
+    owner: releaseOwner,
+    repo: releaseRepo,
+  });
+}
 
 autoUpdater.logger = logger;
 
+app.setName("Hydra Drive");
+app.setPath("userData", SystemPath.getPath("userData"));
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) app.quit();
 
@@ -72,7 +86,7 @@ i18n.init({
   },
 });
 
-const PROTOCOL = "hydralauncher";
+const PROTOCOL = "hydradrive";
 
 // Register the custom schemes as privileged so the renderer can fetch them
 // (supportFetchAPI) and use the results on a canvas without tainting it
@@ -100,7 +114,7 @@ if (process.defaultApp) {
 
 const initializeApp = async () => {
   refreshPortableShortcutLauncher();
-  electronApp.setAppUserModelId("gg.hydralauncher.hydra");
+  electronApp.setAppUserModelId("community.hydradrive.launcher");
 
   logger.info("Crash dumps directory", app.getPath("crashDumps"));
 
@@ -199,10 +213,10 @@ const initializeApp = async () => {
 
   // Check if starting from a "run" deep link - don't show main window in that case
   const deepLinkArg = process.argv.find((arg) =>
-    arg.startsWith("hydralauncher://")
+    arg.startsWith("hydradrive://")
   );
   const forceBigPicture = process.argv.includes("--big-picture");
-  const isRunDeepLink = deepLinkArg?.startsWith("hydralauncher://run");
+  const isRunDeepLink = deepLinkArg?.startsWith("hydradrive://run");
 
   if (!process.argv.includes("--hidden") && !isRunDeepLink) {
     WindowManager.createMainWindow({ forceBigPicture });
@@ -348,13 +362,11 @@ const handleDeepLinkPath = (uri?: string) => {
 };
 
 app.on("second-instance", (_event, commandLine) => {
-  const deepLink = commandLine.find((arg) =>
-    arg.startsWith("hydralauncher://")
-  );
+  const deepLink = commandLine.find((arg) => arg.startsWith("hydradrive://"));
   const forceBigPicture = commandLine.includes("--big-picture");
 
   // Check if this is a "run" deep link - don't show main window in that case
-  const isRunDeepLink = deepLink?.startsWith("hydralauncher://run");
+  const isRunDeepLink = deepLink?.startsWith("hydradrive://run");
 
   if (!isRunDeepLink) {
     if (WindowManager.mainWindow) {

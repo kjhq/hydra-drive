@@ -1,28 +1,17 @@
-import os from "node:os";
+import { app } from "electron";
+import fs from "node:fs";
+import path from "node:path";
+import type { DriveCommit } from "../google-drive/model";
+import { downloadOpaque, publishOpaque } from "../google-drive/opaque-saves";
+import { DriveSaveStore } from "../google-drive/store";
 
-import axios from "axios";
-
-import { HydraApi } from "@main/services/hydra-api";
 import type {
   EmulationCloudSave,
-  EmulationSaveMetadata,
   EmulationSaveEmulator,
+  EmulationSaveMetadata,
   EmulationSavePlatform,
   EmulatorBinary,
 } from "@types";
-
-/*
- * Cloud emulation saves client (`/profile/emulation-saves`). Mirrors the
- * existing save-game cloud flow (`CloudSync.uploadSaveGame`): metadata calls go
- * through `HydraApi` (auth + subscription enforced), while the raw artifact
- * bytes are PUT/GET directly against the short-lived presigned URLs with
- * `axios`. Direct (non-barrel) service imports avoid a services/emulators cycle.
- *
- * Every call requires an active Hydra Cloud subscription.
- */
-
-const SUB = { needsAuth: true, needsSubscription: true } as const;
-const SAVE_KIND = "game_save" as const;
 
 export const toEmulationSaveEmulator = (
   binary: EmulatorBinary
@@ -53,90 +42,98 @@ export interface UploadEmulationSaveInput {
   metadata?: EmulationSaveMetadata;
 }
 
-/** Create a presigned upload, PUT the bytes, then commit — returns the save. */
+const identity = (
+  input: Pick<
+    UploadEmulationSaveInput,
+    "platform" | "emulator" | "objectId" | "saveIdentity"
+  >
+) => ({
+  kind: "emulator" as const,
+  shop: input.platform,
+  objectId: input.objectId ?? "unmatched",
+  slot: `${input.emulator}:${input.saveIdentity}`,
+});
+const toSave = async (commit: DriveCommit): Promise<EmulationCloudSave> => {
+  if (commit.identity.kind !== "emulator")
+    throw new Error("drive_invalid_backup");
+  const file = await new DriveSaveStore().client.metadata(commit.id);
+  return {
+    ...commit.metadata,
+    id: commit.id,
+    label: file?.appProperties?.label ?? commit.label,
+    createdAt: commit.createdAt,
+    updatedAt: commit.createdAt,
+    lastUploadedAt: commit.createdAt,
+    hostname: commit.deviceName,
+    artifactLengthInBytes: commit.metadata.payloadSize,
+  } as EmulationCloudSave;
+};
 export const uploadEmulationSave = async (
   input: UploadEmulationSaveInput
 ): Promise<EmulationCloudSave> => {
-  const hasShop = Boolean(input.shop && input.objectId);
-  const { id, uploadUrl } = await HydraApi.post<{
-    id: string;
-    uploadUrl: string;
-  }>(
-    "/profile/emulation-saves/upload-url",
-    {
-      platform: input.platform,
-      emulator: input.emulator,
-      saveKind: SAVE_KIND,
-      ...(hasShop ? { shop: input.shop, objectId: input.objectId } : {}),
-      saveIdentity: input.saveIdentity,
-      artifactLengthInBytes: input.buffer.length,
-    },
-    SUB
+  const directory = await fs.promises.mkdtemp(
+    path.join(app.getPath("temp"), "drive-emulator-")
   );
-
-  await axios.put(uploadUrl, input.buffer, {
-    headers: { "Content-Type": "application/octet-stream" },
-  });
-
-  return HydraApi.post<EmulationCloudSave>(
-    `/profile/emulation-saves/${id}/commit`,
-    {
-      saveKind: SAVE_KIND,
-      artifactLengthInBytes: input.buffer.length,
-      fileName: input.fileName,
-      hostname: os.hostname(),
-      localLastModifiedAt: input.localLastModifiedAt,
-      label: input.label,
-      ...(input.metadata ? { metadata: input.metadata } : {}),
-    },
-    SUB
-  );
+  try {
+    const source = path.join(directory, "save");
+    await fs.promises.writeFile(source, input.buffer);
+    const { buffer: _, ...metadata } = input;
+    return toSave(
+      await publishOpaque(identity(input), source, input.label, {
+        ...metadata,
+        saveKind: "game_save",
+      })
+    );
+  } finally {
+    await fs.promises.rm(directory, { recursive: true, force: true });
+  }
 };
-
 export const listEmulationSaves = async (
   platform: EmulationSavePlatform,
   emulator: EmulationSaveEmulator,
   objectId?: string | null
 ): Promise<EmulationCloudSave[]> => {
-  const response = await HydraApi.get<EmulationCloudSave[]>(
-    "/profile/emulation-saves",
-    {
-      platform,
-      emulator,
-      saveKind: SAVE_KIND,
-      ...(objectId ? { shop: "launchbox", objectId } : {}),
-    },
-    SUB
+  const store = new DriveSaveStore();
+  const records = (await store.records()).filter(
+    (c) =>
+      c.identity.kind === "emulator" &&
+      c.identity.shop === platform &&
+      c.metadata.emulator === emulator &&
+      (!objectId || c.identity.objectId === objectId)
   );
-  return Array.isArray(response) ? response : [];
+  const saves: EmulationCloudSave[] = [];
+  for (const record of records) {
+    if (record.deleted || !record.archiveId) continue;
+    const file = await store.client.metadata(record.archiveId);
+    if (file && !file.trashed) saves.push(await toSave(record));
+  }
+  return saves.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 };
-
-/** Resolve a download URL and fetch the raw save bytes. */
 export const downloadEmulationSaveBytes = async (
   id: string
 ): Promise<Buffer> => {
-  const { downloadUrl } = await HydraApi.post<{ downloadUrl: string }>(
-    `/profile/emulation-saves/${id}/download-url`,
-    undefined,
-    SUB
+  const record = await new DriveSaveStore().record(id);
+  if (record.identity.kind !== "emulator")
+    throw new Error("drive_invalid_backup");
+  const directory = await fs.promises.mkdtemp(
+    path.join(app.getPath("temp"), "drive-emulator-restore-")
   );
-  const response = await axios.get<ArrayBuffer>(downloadUrl, {
-    responseType: "arraybuffer",
-  });
-  return Buffer.from(response.data);
+  try {
+    const target = path.join(directory, "save");
+    await downloadOpaque(record, target);
+    return await fs.promises.readFile(target);
+  } finally {
+    await fs.promises.rm(directory, { recursive: true, force: true });
+  }
 };
-
 export const deleteEmulationSave = async (id: string): Promise<void> => {
-  await HydraApi.delete(`/profile/emulation-saves/${id}`, SUB);
+  await new DriveSaveStore().deleteBackup(id);
 };
-
 export const updateEmulationSave = async (
   id: string,
   body: { label?: string | null; metadata?: Record<string, unknown> | null }
 ): Promise<EmulationCloudSave> => {
-  return HydraApi.put<EmulationCloudSave>(
-    `/profile/emulation-saves/${id}`,
-    body,
-    SUB
-  );
+  const store = new DriveSaveStore();
+  await store.annotate(id, { label: body.label ?? "" });
+  return toSave(await store.record(id));
 };

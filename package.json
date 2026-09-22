@@ -1,12 +1,12 @@
 {
-  "name": "hydralauncher",
-  "version": "4.1.4",
-  "description": "Hydra",
+  "name": "hydra-drive",
+  "version": "4.1.4-drive.1",
+  "description": "Hydra Drive \u2014 personal game-save backups",
   "main": "./out/main/index.js",
   "author": "Los Broxas",
   "repository": {
     "type": "git",
-    "url": "https://github.com/hydralauncher/hydra.git"
+    "url": "https://github.com/kjhq/hydra-drive.git"
   },
   "type": "module",
   "engines": {
@@ -16,6 +16,7 @@
   "scripts": {
     "format": "prettier --write .",
     "format-check": "prettier --check .",
+    "test:native-saves": "node scripts/test-native-saves.cjs",
     "test": "node --import ./scripts/register-ts-node.mjs --test \"src/**/*.test.ts\"",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
@@ -26,10 +27,10 @@
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "npm run build:native && electron-builder install-app-deps && node ./scripts/postinstall.cjs",
-    "build:unpack": "npm run build:native && npm run build && electron-builder --dir",
-    "build:win": "npm run build:native && electron-vite build && electron-builder --win",
-    "build:mac": "npm run build:native && electron-vite build && electron-builder --mac",
-    "build:linux": "npm run build:native && electron-vite build && electron-builder --linux",
+    "build:unpack": "npm run build:native && npm run build && electron-builder --config electron-builder.cjs --publish never --dir",
+    "build:win": "npm run build:native && electron-vite build && electron-builder --config electron-builder.cjs --publish never --win",
+    "build:mac": "npm run build:native && electron-vite build && electron-builder --config electron-builder.cjs --publish never --mac",
+    "build:linux": "npm run build:native && electron-vite build && electron-builder --config electron-builder.cjs --publish never --linux",
     "dev:big-picture": "vite dev src/big-picture",
     "prepare": "husky"
   },
@@ -153,5 +154,9 @@
     "vite": "6.4.3",
     "vite-plugin-svgr": "^4.5.0"
   },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
+  "homepage": "https://github.com/kjhq/hydra-drive",
+  "bugs": {
+    "url": "https://github.com/kjhq/hydra-drive/issues"
+  }
 }

@@ -2,40 +2,41 @@ import { Fragment, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
+  BigPictureToastHost,
+  CloudGiftNotificationModal,
+  HorizontalFocusGroup,
+  InputModeProvider,
+  NavigationAutoScrollBridge,
+  NavigationDiagnostics,
+  NavigationHistoryBridge,
+  NavigationInputProvider,
+  NavigationLayer,
+  NavigationStateBridge,
+  VerticalFocusGroup,
+  VirtualKeyboardProvider,
+} from "./components";
+import { BigPictureDrivePromptHost } from "./components/google-drive/drive-prompt";
+import { IS_DESKTOP } from "./constants";
+import { getItemFocusTarget } from "./helpers";
+import { useBigPictureToast, useNavigation, useUserPreferences } from "./hooks";
+import { BigPictureI18nBridge, ensureBigPictureI18nResources } from "./i18n";
+import {
   BIG_PICTURE_APP_LAYER_ID,
   BIG_PICTURE_CONTENT_REGION_ID,
   BIG_PICTURE_SHELL_REGION_ID,
-  getBigPictureContentEntryRegionIdFromPathname,
   BIG_PICTURE_SIDEBAR_ITEM_IDS,
+  getBigPictureContentEntryRegionIdFromPathname,
   getBigPictureGameRouteMatch,
-  getBigPictureSidebarLibraryGameFocusId,
   getBigPictureSidebarItemIdFromPathname,
+  getBigPictureSidebarLibraryGameFocusId,
   Header,
   Sidebar,
 } from "./layout";
-import { IS_DESKTOP } from "./constants";
-import { useBigPictureToast, useNavigation, useUserPreferences } from "./hooks";
-import {
-  HorizontalFocusGroup,
-  InputModeProvider,
-  NavigationHistoryBridge,
-  NavigationLayer,
-  NavigationAutoScrollBridge,
-  NavigationInputProvider,
-  NavigationStateBridge,
-  NavigationDiagnostics,
-  VerticalFocusGroup,
-  BigPictureToastHost,
-  CloudGiftNotificationModal,
-  VirtualKeyboardProvider,
-} from "./components";
-import { getItemFocusTarget } from "./helpers";
+import { NavigationAudioService, type FocusOverrides } from "./services";
 import {
   initializeBigPictureRunningGamesStore,
   useInputModeStore,
 } from "./stores";
-import { NavigationAudioService, type FocusOverrides } from "./services";
-import { BigPictureI18nBridge, ensureBigPictureI18nResources } from "./i18n";
 
 import "./styles/globals.scss";
 
@@ -219,6 +220,7 @@ export default function App() {
           <NavigationDiagnostics />
           <BigPictureToastHost />
           <CloudGiftNotificationModal />
+          <BigPictureDrivePromptHost />
         </div>
       </NavigationInputProvider>
     </Fragment>

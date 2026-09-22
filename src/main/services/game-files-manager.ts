@@ -1,10 +1,13 @@
 import { ASSETS_PATH } from "@main/constants";
 import { getGameAssets } from "@main/events/catalogue/get-game-assets";
 import { getDirectorySize } from "@main/events/helpers/get-directory-size";
+import { deleteArchiveFile } from "@main/events/library/delete-archive";
+import { platformToRetroArchPlatform, platformToSystem } from "@main/helpers";
 import { findGameExecutableInFolder } from "@main/helpers/find-game-executable";
+import { getWindowsVbsPath } from "@main/helpers/shortcut-launch";
 import { updateGameExecutablePath } from "@main/helpers/update-executable-path";
-import { runAchievementMetadataExport } from "@main/services/achievements/metadata-export";
 import { db, downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
+import { runAchievementMetadataExport } from "@main/services/achievements/metadata-export";
 import {
   Downloader,
   FILE_EXTENSIONS_TO_EXTRACT,
@@ -26,18 +29,15 @@ import path from "node:path";
 import pngToIco from "png-to-ico";
 import sharp from "sharp";
 import { ExtractionProgress, SevenZip } from "./7zip";
+import { runAutomaticCloudSaveSync } from "./cloud-save";
 import * as emulators from "./emulators";
-import * as retroarch from "./retroarch";
 import { getPathType } from "./extraction-path";
 import { GameExecutables } from "./game-executables";
 import { logger } from "./logger";
-import { platformToRetroArchPlatform, platformToSystem } from "@main/helpers";
-import { getWindowsVbsPath } from "@main/helpers/shortcut-launch";
-import { deleteArchiveFile } from "@main/events/library/delete-archive";
 import { publishExtractionCompleteNotification } from "./notifications";
+import * as retroarch from "./retroarch";
 import { SystemPath } from "./system-path";
 import { WindowManager } from "./window-manager";
-import { runAutomaticCloudSaveSync } from "./cloud-save";
 
 const PROGRESS_THROTTLE_MS = 1000;
 
@@ -651,7 +651,7 @@ export class GameFilesManager {
       objectId: this.objectId,
     });
 
-    return `hydralauncher://run?${query.toString()}`;
+    return `hydradrive://run?${query.toString()}`;
   }
 
   private quoteLinuxExecArg(value: string) {

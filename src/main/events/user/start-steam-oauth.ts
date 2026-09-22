@@ -3,7 +3,7 @@ import { openSteamOpenIdWindow } from "@main/services/steam-integration/steam-st
 import { steamSyncOrchestrator } from "@main/services/steam-integration/steam-sync-orchestrator";
 import { registerEvent } from "../register-event";
 
-const STEAM_OAUTH_RETURN_TO = "hydralauncher://steam-connected";
+const STEAM_OAUTH_RETURN_TO = "hydradrive://steam-connected";
 
 const getErrorMessage = (error: unknown): string | null => {
   if (typeof error === "object" && error !== null) {

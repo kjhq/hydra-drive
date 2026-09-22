@@ -1,50 +1,23 @@
-import { WindowManager } from "./window-manager";
+import { INTERVALS } from "@main/constants";
 import { updateGameExecutablePath } from "@main/helpers/update-executable-path";
-import { createGame, trackGamePlaytime } from "./library-sync";
+import { isWindowsBatchFile } from "@main/helpers/windows-batch-command";
+import { db, gamesSublevel, levelKeys } from "@main/level";
 import type { Game, UserPreferences } from "@types";
 import axios from "axios";
-import { db, gamesSublevel, levelKeys } from "@main/level";
-import { CloudSync } from "./cloud-sync";
-import { logger, networkLogger } from "./logger";
-import { PowerSaveBlockerManager } from "./power-save-blocker";
-import path from "node:path";
 import fs from "node:fs/promises";
+import path from "node:path";
 import { AchievementWatcherManager } from "./achievements/achievement-watcher-manager";
 import { abortAchievementMetadataExport } from "./achievements/metadata-export";
-import { INTERVALS } from "@main/constants";
-import { Wine } from "./wine";
-import { NativeAddon } from "./native-addon";
-import { emulatorSessions } from "./emulators/emulator-session-tracker";
-import { launchedGamePids } from "./launched-game-pids";
-import {
-  isValidProcessWatcherScan,
-  startOptionalExecutableCatalogueLoad,
-} from "./process-watcher-scan";
-import {
-  doesSteamCompatDataPathMatchWinePrefix,
-  hasLaunchedPidMatch,
-  hasLinuxNativeOrAppImageMatch,
-  type LinuxProcessInfo,
-} from "./linux-process-match";
-import { isWindowsBatchFile } from "@main/helpers/windows-batch-command";
-import { HydraApi } from "./hydra-api";
-import { getSteamLibraryFolders } from "./steam";
-import {
-  isSteamLibraryExecutablePath,
-  resolveActiveSteamImport,
-  resolveSteamSessionPlaytimePolicy,
-} from "./steam-integration/steam-playtime";
-import {
-  cancelSteamGameExitSync,
-  scheduleSteamGameExitSync,
-  shouldScheduleSteamGameExitSync,
-} from "./steam-integration/steam-game-exit-sync";
 import {
   getCloudSaveAutomaticSyncMode,
   runAutomaticCloudSavePostExit,
   shouldRunLegacyAutomaticCloudSave,
   shouldRunV2AutomaticCloudSave,
 } from "./cloud-save";
+import { CloudSync } from "./cloud-sync";
+import { emulatorSessions } from "./emulators/emulator-session-tracker";
+import { GameExecutables } from "./game-executables";
+import { updateGameRecord } from "./game-record-updater";
 import {
   clearGamesPlaytimeState,
   deleteGamePlaytime,
@@ -53,34 +26,66 @@ import {
   getTrackedGamesRunning,
   setGamePlaytime,
 } from "./game-running-state";
+import { GoogleDriveAuth } from "./google-drive/auth";
+import { HydraApi } from "./hydra-api";
+import { launchedGamePids } from "./launched-game-pids";
+import { createGame, trackGamePlaytime } from "./library-sync";
 import {
   prepareLinuxGameCaptureSession,
   stopLinuxGameCaptureSession,
 } from "./linux-game-capture-session";
-import { updateGameRecord } from "./game-record-updater";
-import { GameExecutables } from "./game-executables";
+import {
+  doesSteamCompatDataPathMatchWinePrefix,
+  hasLaunchedPidMatch,
+  hasLinuxNativeOrAppImageMatch,
+  type LinuxProcessInfo,
+} from "./linux-process-match";
+import { logger, networkLogger } from "./logger";
+import { NativeAddon } from "./native-addon";
+import { PowerSaveBlockerManager } from "./power-save-blocker";
+import {
+  isValidProcessWatcherScan,
+  startOptionalExecutableCatalogueLoad,
+} from "./process-watcher-scan";
+import { getSteamLibraryFolders } from "./steam";
+import {
+  cancelSteamGameExitSync,
+  scheduleSteamGameExitSync,
+  shouldScheduleSteamGameExitSync,
+} from "./steam-integration/steam-game-exit-sync";
+import {
+  isSteamLibraryExecutablePath,
+  resolveActiveSteamImport,
+  resolveSteamSessionPlaytimePolicy,
+} from "./steam-integration/steam-playtime";
+import { WindowManager } from "./window-manager";
+import { Wine } from "./wine";
 
-export { gamesPlaytime };
 export { isGameRunning } from "./game-running-state";
+export { gamesPlaytime };
 
+const legacyLaunchAccounts = new Map<string, string>();
 const runAutomaticCloudSaveOnOpen = async (game: Game) => {
-  const mode = await getCloudSaveAutomaticSyncMode(game.objectId, game.shop);
-
-  if (shouldRunLegacyAutomaticCloudSave(mode)) {
-    await CloudSync.uploadSaveGame(
-      game.objectId,
-      game.shop,
-      null,
-      CloudSync.getBackupLabel(true)
+  const accountId = GoogleDriveAuth.status().account?.id;
+  if (accountId)
+    legacyLaunchAccounts.set(
+      levelKeys.game(game.shop, game.objectId),
+      accountId
     );
-  }
 };
 
 const runAutomaticCloudSaveOnClose = async (game: Game) => {
   const mode = await getCloudSaveAutomaticSyncMode(game.objectId, game.shop);
 
   if (shouldRunLegacyAutomaticCloudSave(mode)) {
-    if (game.remoteId) {
+    const launchAccount = legacyLaunchAccounts.get(
+      levelKeys.game(game.shop, game.objectId)
+    );
+    legacyLaunchAccounts.delete(levelKeys.game(game.shop, game.objectId));
+    if (
+      GoogleDriveAuth.isConnected() &&
+      launchAccount === GoogleDriveAuth.status().account?.id
+    ) {
       await CloudSync.uploadSaveGame(
         game.objectId,
         game.shop,

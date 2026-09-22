@@ -1,5 +1,3 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
 import {
   ClockIcon,
   CpuIcon,
@@ -11,6 +9,9 @@ import {
   SyncIcon,
   TrashIcon,
 } from "@primer/octicons-react";
+import { useGoogleDrive } from "@renderer/hooks/use-google-drive";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Button, ConfirmationModal } from "@renderer/components";
 import { DropdownMenu } from "@renderer/components/dropdown-menu/dropdown-menu";
@@ -20,9 +21,8 @@ import {
   getSkuRegionFlag,
   getSkuRegionFromSaveIdentity,
 } from "@renderer/helpers";
-import { useToast, useUserDetails } from "@renderer/hooks";
+import { useToast } from "@renderer/hooks";
 import { useCloudConnector } from "@renderer/hooks/use-cloud-connector";
-import { useSubscription } from "@renderer/hooks/use-subscription";
 import type {
   EmulationCloudSave,
   EmulationSavePlatform,
@@ -50,10 +50,9 @@ const getDolphinSavePlatformLabel = (
 
 export function CloudSavesSection({ config, refreshKey }: Readonly<Props>) {
   const { t } = useTranslation("settings");
-  const { t: tHydraCloud } = useTranslation("hydra_cloud");
   const { showSuccessToast } = useToast();
-  const { hasActiveSubscription } = useUserDetails();
-  const { showHydraCloudModal } = useSubscription();
+  const { isDriveConnected } = useGoogleDrive();
+  const { connectGoogleDrive } = useGoogleDrive();
   const platforms = useMemo<EmulationSavePlatform[]>(
     () =>
       config.system === "dolphin"
@@ -71,7 +70,7 @@ export function CloudSavesSection({ config, refreshKey }: Readonly<Props>) {
   const { stageRef, consoleRef, gridRef, connector } = useCloudConnector(saves);
 
   const load = useCallback(async () => {
-    if (!hasActiveSubscription) {
+    if (!isDriveConnected) {
       setSaves([]);
       return;
     }
@@ -86,7 +85,7 @@ export function CloudSavesSection({ config, refreshKey }: Readonly<Props>) {
     } finally {
       setRefreshing(false);
     }
-  }, [hasActiveSubscription, platforms]);
+  }, [isDriveConnected, platforms]);
 
   useEffect(() => {
     load();
@@ -100,7 +99,7 @@ export function CloudSavesSection({ config, refreshKey }: Readonly<Props>) {
     load();
   }, [deleteFor, showSuccessToast, t, load]);
 
-  if (!hasActiveSubscription) {
+  if (!isDriveConnected) {
     return (
       <section className="emulator-detail__section emulator-detail__cloud-section">
         <header className="emulator-detail__section-header">
@@ -144,14 +143,14 @@ export function CloudSavesSection({ config, refreshKey }: Readonly<Props>) {
               <LockIcon size={24} />
             </span>
             <p className="emulator-detail__cloud-locked-title">
-              {tHydraCloud("hydra_cloud_feature_found")}
+              {"Connect Google Drive to back up and restore saves."}
             </p>
             <Button
               theme="outline"
-              onClick={() => showHydraCloudModal("backup")}
+              onClick={() => connectGoogleDrive("backup")}
             >
               <HydraIcon className="emulator-detail__cloud-locked-hydra" />
-              <span>{tHydraCloud("learn_more")}</span>
+              <span>{"Connect Google Drive"}</span>
             </Button>
           </div>
         </div>

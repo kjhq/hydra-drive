@@ -11,6 +11,7 @@ on:
 
 jobs:
   build:
+    if: github.repository == 'hydralauncher/hydra'
     strategy:
       matrix:
         os: [windows-2022, ubuntu-latest]
@@ -81,6 +82,10 @@ jobs:
         run: |
           yarn build:linux
         env:
+          MAIN_VITE_GOOGLE_CLIENT_ID: ${{ vars.MAIN_VITE_GOOGLE_CLIENT_ID }}
+          MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ vars.MAIN_VITE_GOOGLE_CLIENT_SECRET }}
+          MAIN_VITE_RELEASE_OWNER: ${{ vars.MAIN_VITE_RELEASE_OWNER }}
+          MAIN_VITE_RELEASE_REPO: ${{ vars.MAIN_VITE_RELEASE_REPO }}
           MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL }}
           MAIN_VITE_AUTH_URL: ${{ vars.MAIN_VITE_AUTH_URL }}
           MAIN_VITE_CHECKOUT_URL: ${{ vars.MAIN_VITE_CHECKOUT_URL }}
@@ -98,6 +103,10 @@ jobs:
         if: matrix.os == 'windows-2022'
         run: yarn build:win
         env:
+          MAIN_VITE_GOOGLE_CLIENT_ID: ${{ vars.MAIN_VITE_GOOGLE_CLIENT_ID }}
+          MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ vars.MAIN_VITE_GOOGLE_CLIENT_SECRET }}
+          MAIN_VITE_RELEASE_OWNER: ${{ vars.MAIN_VITE_RELEASE_OWNER }}
+          MAIN_VITE_RELEASE_REPO: ${{ vars.MAIN_VITE_RELEASE_REPO }}
           MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL }}
           MAIN_VITE_AUTH_URL: ${{ vars.MAIN_VITE_AUTH_URL }}
           MAIN_VITE_CHECKOUT_URL: ${{ vars.MAIN_VITE_CHECKOUT_URL }}

@@ -1,4 +1,5 @@
 import { app, dialog } from "electron";
+import path from "node:path";
 import { logger } from "./logger";
 
 export class SystemPath {
@@ -36,7 +37,9 @@ export class SystemPath {
 
   static getPath(pathName: keyof typeof SystemPath.paths): string {
     try {
-      return app.getPath(pathName);
+      return pathName === "userData"
+        ? path.join(app.getPath("appData"), "Hydra Drive")
+        : app.getPath(pathName);
     } catch (error) {
       console.error(`Error getting path: ${error}`);
       return "";

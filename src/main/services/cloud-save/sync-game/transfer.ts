@@ -92,7 +92,8 @@ export const restoreRemoteState = async (
     updateAnchor,
     carriedUnresolvedEntryIds,
     0,
-    assertEnvironmentCurrent
+    assertEnvironmentCurrent,
+    localSnapshotContext.aggregateHash
   );
   if (!result.ok || result.failedFiles > 0) {
     throw new Error(

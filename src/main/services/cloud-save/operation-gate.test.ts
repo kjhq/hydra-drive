@@ -137,3 +137,22 @@ describe("cloud save operation gate", () => {
     assert.equal(second, "second");
   });
 });
+it("blocks external restores during launch and launches during restore", async () => {
+  const gate = new CloudSaveOperationGate(),
+    pending = deferred<string>();
+  const launch = gate.runLaunch("game", () => pending.promise);
+  await assert.rejects(
+    gate.runSync("game", "manual", async () => "bad"),
+    /cloud_save_operation_active/
+  );
+  pending.resolve("done");
+  await launch;
+  const syncing = deferred<string>(),
+    sync = gate.runSync("game", "restore", () => syncing.promise);
+  await assert.rejects(
+    gate.runLaunch("game", async () => "bad"),
+    /cloud_save_operation_active/
+  );
+  syncing.resolve("done");
+  await sync;
+});

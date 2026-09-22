@@ -1,9 +1,14 @@
+import { logger } from "@main/services/logger";
 import type {
   CloudSaveCustomPathBindings,
   CloudSaveState,
   GameShop,
 } from "@types";
-import { logger } from "@main/services/logger";
+import { isGameRunning } from "../game-running-state";
+import { decideSync, heads } from "../google-drive/model";
+import { pcIdentity, summary } from "../google-drive/pc-saves";
+import { recoverRestores } from "../google-drive/restore-runtime";
+import { DriveSaveStore } from "../google-drive/store";
 
 import { NativeAddon } from "../native-addon";
 import { buildLocalGameSnapshotContext } from "./build-local-game-snapshot";
@@ -16,7 +21,6 @@ import {
   reconcileCloudSaveCustomPathsWithRemote,
 } from "./custom-path-store";
 import { getInstallationOwnedCustomPathRawPaths } from "./installation-owned-custom-paths";
-import { listRemoteGameSnapshots } from "./list-remote-game-snapshots";
 import { mergeUserVariantSnapshots } from "./merge-user-variant-snapshots";
 import { reconcileRemoteTargetObservations } from "./reconcile-remote-target-observations";
 import {
@@ -31,10 +35,6 @@ interface AnalyzeCloudSaveStateOptions {
   allowInstallationOwnedCustomPathDeletion?: boolean;
 }
 
-const samePaths = (left: string[], right: string[]) =>
-  left.length === right.length &&
-  left.every((value, index) => value === right[index]);
-
 const isUnavailableRestoreEnvironment = (error: unknown) =>
   error instanceof Error &&
   (error.message === "cloud_save_restore_prefix_unresolved" ||
@@ -48,10 +48,17 @@ export const analyzeCloudSaveState = async (
   syncDirection: SyncDirection = "bidirectional",
   options: AnalyzeCloudSaveStateOptions = {}
 ) => {
-  const [context, remoteSnapshots] = await Promise.all([
+  await recoverRestores(JSON.stringify([shop, objectId]), async () => {
+    if (isGameRunning(objectId, shop))
+      throw new Error("cloud_save_game_running");
+  });
+  const [context, driveRecords] = await Promise.all([
     suppliedContext ?? getCloudSaveGameContext(objectId, shop),
-    listRemoteGameSnapshots(objectId, shop),
+    new DriveSaveStore().records(pcIdentity(objectId, shop)),
   ]);
+  const remoteSnapshots = heads(driveRecords)
+    .filter((c) => !c.deleted)
+    .map(summary);
   const activeRemoteSnapshot = remoteSnapshots[0] ?? null;
   const remoteManifest = activeRemoteSnapshot
     ? await getRemoteSnapshotRestoreManifest(activeRemoteSnapshot)
@@ -185,31 +192,17 @@ export const analyzeCloudSaveState = async (
     files: merge.files,
   });
 
-  let currentState: CloudSaveState;
-  if (!activeRemoteSnapshot) {
-    currentState = "untracked";
-  } else if (merge.conflicts.length > 0) {
-    currentState = "conflict";
-  } else if (
-    mergedAggregateHash !== activeRemoteSnapshot.aggregateHash ||
-    !samePaths(
-      mergedCustomPathRawPaths,
-      remoteManifest?.customPathRawPaths ?? []
-    )
-  ) {
-    currentState = "local-ahead";
-  } else if (
-    merge.restoreEntryIds.length > 0 ||
-    merge.deleteLocalEntryIds.length > 0
-  ) {
-    currentState = "remote-ahead";
-  } else if (merge.partial) {
-    currentState = "partial";
-  } else {
-    currentState = "synced";
-  }
+  const currentState: CloudSaveState = decideSync({
+    commits: driveRecords,
+    localHash: localSnapshot.aggregateHash,
+    remoteHash: activeRemoteSnapshot?.aggregateHash,
+    baseId: anchor?.baseSnapshotId,
+    baseHash: anchor?.baseAggregateHash,
+    localEmpty: localSnapshot.files.length === 0,
+  });
 
   return {
+    driveHeadIds: heads(driveRecords).map((c) => c.id),
     context,
     customPathBindings,
     pendingCustomPathRawPaths: trackingState.pendingRawPaths,

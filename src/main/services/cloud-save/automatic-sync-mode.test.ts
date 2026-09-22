@@ -49,14 +49,14 @@ describe("cloud save automatic sync mode", () => {
     );
   });
 
-  it("treats an absent V2 setting as the day-one V2 default", () => {
+  it("requires per-game opt-in when the Google account has no stored V2 setting", () => {
     assert.equal(
       resolveStoredCloudSaveAutomaticSyncMode(false, undefined),
-      "v2"
+      "disabled"
     );
     assert.equal(
       resolveStoredCloudSaveAutomaticSyncMode(true, undefined),
-      "v2"
+      "legacy"
     );
     assert.equal(resolveStoredCloudSaveAutomaticSyncMode(true, true), "v2");
   });

@@ -9,17 +9,25 @@ import type {
   CloudSaveAutomaticSyncModeChangedEvent,
   GameShop,
 } from "@types";
+import { GoogleDriveAuth } from "../google-drive/auth";
 
 import { WindowManager } from "../window-manager";
-import { assertCloudSaveSubscription } from "./cloud-save-access";
 import {
   getCloudSaveAutomaticSyncStateForMode,
   getNextCloudSaveAutomaticSyncMode,
   resolveStoredCloudSaveAutomaticSyncModeForShop,
 } from "./automatic-sync-mode";
+import { assertCloudSaveSubscription } from "./cloud-save-access";
 
 const getAutomaticSyncKey = (shop: GameShop, objectId: string) =>
-  levelKeys.game(shop, objectId);
+  JSON.stringify([
+    "google",
+    GoogleDriveAuth.isConnected()
+      ? GoogleDriveAuth.accountId()
+      : "disconnected",
+    shop,
+    objectId,
+  ]);
 
 const notifyAutomaticSyncModeChanged = (
   objectId: string,
@@ -43,14 +51,14 @@ const readCloudSaveAutomaticSyncMode = async (
   shop: GameShop
 ) => {
   const key = getAutomaticSyncKey(shop, objectId);
-  const [storedV2Enabled, game] = await Promise.all([
+  const [storedV2Enabled, game, legacyEnabled] = await Promise.all([
     cloudSaveAutomaticSyncSettingsSublevel.get(key),
-    gamesSublevel.get(key),
+    gamesSublevel.get(levelKeys.game(shop, objectId)),
+    cloudSaveAutomaticSyncSettingsSublevel.get(`${key}:legacy`),
   ]);
-  const legacyEnabled = game?.automaticCloudSync === true;
   const mode = resolveStoredCloudSaveAutomaticSyncModeForShop(
     shop,
-    legacyEnabled,
+    legacyEnabled ?? false,
     storedV2Enabled
   );
 
@@ -62,14 +70,17 @@ const persistCloudSaveAutomaticSyncMode = async (
   shop: GameShop,
   mode: CloudSaveAutomaticSyncMode
 ) => {
+  const session = GoogleDriveAuth.isConnected()
+    ? GoogleDriveAuth.session()
+    : null;
   const key = getAutomaticSyncKey(shop, objectId);
-  const game = await gamesSublevel.get(key);
+  const game = await gamesSublevel.get(levelKeys.game(shop, objectId));
   const state = getCloudSaveAutomaticSyncStateForMode(mode);
   const batch = db.batch();
 
   if (game && game.automaticCloudSync !== state.legacyEnabled) {
     batch.put(
-      key,
+      levelKeys.game(shop, objectId),
       {
         ...game,
         automaticCloudSync: state.legacyEnabled,
@@ -82,6 +93,10 @@ const persistCloudSaveAutomaticSyncMode = async (
     sublevel: cloudSaveAutomaticSyncSettingsSublevel,
   });
 
+  batch.put(`${key}:legacy`, state.legacyEnabled, {
+    sublevel: cloudSaveAutomaticSyncSettingsSublevel,
+  });
+  if (session) GoogleDriveAuth.assert(session);
   await batch.write();
   notifyAutomaticSyncModeChanged(objectId, shop, mode);
 };
@@ -103,10 +118,7 @@ export const setCloudSaveAutomaticSyncEnabled = async (
   shop: GameShop,
   enabled: boolean
 ) => {
-  if (enabled) {
-    assertCloudSaveSubscription();
-  }
-
+  if (enabled) assertCloudSaveSubscription();
   const { mode: currentMode } = await readCloudSaveAutomaticSyncMode(
     objectId,
     shop
@@ -127,6 +139,7 @@ export const setLegacyCloudSaveAutomaticSyncEnabled = async (
   shop: GameShop,
   enabled: boolean
 ) => {
+  if (enabled) assertCloudSaveSubscription();
   const { mode: currentMode } = await readCloudSaveAutomaticSyncMode(
     objectId,
     shop

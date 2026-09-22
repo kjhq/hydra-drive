@@ -1,5 +1,3 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -11,15 +9,18 @@ import {
   TrashIcon,
   UploadIcon,
 } from "@primer/octicons-react";
+import { useGoogleDrive } from "@renderer/hooks/use-google-drive";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Button, ConfirmationModal, TextField } from "@renderer/components";
 import { DropdownMenu } from "@renderer/components/dropdown-menu/dropdown-menu";
-import { useToast, useUserDetails } from "@renderer/hooks";
+import { getSkuRegion, getSkuRegionFlag } from "@renderer/helpers";
+import { useToast } from "@renderer/hooks";
 import {
   resolveCardBackupProgress,
   useEmulationBackupProgress,
 } from "@renderer/hooks/use-emulation-backup-progress";
-import { getSkuRegion, getSkuRegionFlag } from "@renderer/helpers";
 import type {
   EmulationSavePlatform,
   EmulatorConfig,
@@ -104,7 +105,7 @@ const countKey = (isPs1: boolean, count: number): string => {
 export function MemoryCardsSection({ config, onUploaded }: Readonly<Props>) {
   const { t } = useTranslation("settings");
   const { showSuccessToast, showErrorToast } = useToast();
-  const { hasActiveSubscription } = useUserDetails();
+  const { isDriveConnected } = useGoogleDrive();
 
   const isPs1 = config.system === "ps1";
   const api = isPs1 ? ps1Api : ps2Api;
@@ -408,7 +409,7 @@ export function MemoryCardsSection({ config, onUploaded }: Readonly<Props>) {
                             )}
                           </span>
                         </button>
-                        {hasActiveSubscription && (
+                        {isDriveConnected && (
                           <button
                             type="button"
                             className="emulator-detail__memcard-backup-all"
@@ -537,7 +538,7 @@ export function MemoryCardsSection({ config, onUploaded }: Readonly<Props>) {
                                             : t("cloud_backup"),
                                         disabled:
                                           backingUpKey === saveKey(save),
-                                        show: hasActiveSubscription,
+                                        show: isDriveConnected,
                                         onClick: () => handleBackup(save),
                                       },
                                     ]}

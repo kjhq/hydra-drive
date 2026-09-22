@@ -1,16 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
 import {
   KebabHorizontalIcon,
   QuestionIcon,
   SyncIcon,
   UploadIcon,
 } from "@primer/octicons-react";
+import { useGoogleDrive } from "@renderer/hooks/use-google-drive";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Button, GuideLink } from "@renderer/components";
 import { DropdownMenu } from "@renderer/components/dropdown-menu/dropdown-menu";
 import { getSkuRegion, getSkuRegionFlag } from "@renderer/helpers";
-import { useToast, useUserDetails } from "@renderer/hooks";
+import { useToast } from "@renderer/hooks";
 import { formatBytes } from "@shared";
 import type {
   EmulationSavePlatform,
@@ -45,7 +46,7 @@ export function LocalEmulatorSavesSection({
 }: Readonly<Props>) {
   const { t } = useTranslation("settings");
   const { showSuccessToast, showErrorToast } = useToast();
-  const { hasActiveSubscription } = useUserDetails();
+  const { isDriveConnected } = useGoogleDrive();
   const platforms = useMemo(
     () => localSavePlatforms(config.system),
     [config.system]
@@ -194,7 +195,7 @@ export function LocalEmulatorSavesSection({
                   </span>
                 </div>
 
-                {hasActiveSubscription && (
+                {isDriveConnected && (
                   <DropdownMenu
                     align="end"
                     items={[

@@ -1,14 +1,18 @@
-import { shell } from "electron";
-import { spawn } from "node:child_process";
-import fs from "node:fs";
-import path from "node:path";
-import { GameShop, type Game, type UserPreferences } from "@types";
 import { db, gamesSublevel, levelKeys } from "@main/level";
-import { updateGameExecutablePath } from "./update-executable-path";
 import {
-  clearCloudSaveLaunchGuard,
-  canRunAutomaticCloudSaveSync,
+  NativeAddon,
+  PowerSaveBlockerManager,
+  Umu,
+  WindowManager,
+  Wine,
+  launchedGamePids,
+  logger,
+} from "@main/services";
+import { runAchievementMetadataExport } from "@main/services/achievements/metadata-export";
+import {
   canCreateCloudSaveUploadGuard,
+  canRunAutomaticCloudSaveSync,
+  clearCloudSaveLaunchGuard,
   createPendingCloudSaveCustomPathApproval,
   getCloudSaveGameContext,
   rotateCloudSavePrefixGeneration,
@@ -17,24 +21,23 @@ import {
   setCloudSaveLaunchGuard,
   shouldBlockGameLaunchForCloudSave,
 } from "@main/services/cloud-save";
-import {
-  WindowManager,
-  logger,
-  Umu,
-  PowerSaveBlockerManager,
-  Wine,
-  NativeAddon,
-  launchedGamePids,
-} from "@main/services";
-import { updateGameRecord } from "@main/services/game-record-updater";
-import { dispatchSteamProtocolLaunch } from "@main/services/steam-integration/steam-protocol-launch-dispatch";
-import { resolveSteamProtocolLaunch } from "@main/services/steam-integration/steam-protocol-launch";
 import { CommonRedistManager } from "@main/services/common-redist-manager";
-import { runAchievementMetadataExport } from "@main/services/achievements/metadata-export";
+import { updateGameRecord } from "@main/services/game-record-updater";
+import { resolveSteamProtocolLaunch } from "@main/services/steam-integration/steam-protocol-launch";
+import { dispatchSteamProtocolLaunch } from "@main/services/steam-integration/steam-protocol-launch-dispatch";
+import { GameShop, type Game, type UserPreferences } from "@types";
+import { shell } from "electron";
+import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import { parseExecutablePath } from "../events/helpers/parse-executable-path";
+import { isGameRunning } from "../services/game-running-state";
+import { GoogleDriveAuth } from "../services/google-drive/auth";
+import { recoverRestores } from "../services/google-drive/restore-runtime";
 import { isGamemodeAvailable } from "./is-gamemode-available";
 import { isMangohudAvailable } from "./is-mangohud-available";
 import { resolveLaunchCommand } from "./resolve-launch-command";
+import { updateGameExecutablePath } from "./update-executable-path";
 import {
   buildWindowsBatchCommand,
   isWindowsBatchFile,
@@ -655,6 +658,10 @@ const launchGameWithCloudSaveChecks = async (
     : null;
   const launchGameRecord = updatedGame ?? game;
 
+  await recoverRestores(JSON.stringify([shop, objectId]), async () => {
+    if (isGameRunning(objectId, shop))
+      throw new Error("cloud_save_game_running");
+  });
   await WindowManager.createGameLauncherWindow(shop, objectId);
 
   const shouldRunV2AutomaticSync = await canRunAutomaticCloudSaveSync(
@@ -768,6 +775,7 @@ const launchGameWithCloudSaveChecks = async (
     setCloudSaveLaunchGuard(objectId, shop, {
       environmentId: cloudSaveContext.environmentId,
       baseRemoteHash: preLaunchResult?.remoteHash ?? null,
+      accountId: GoogleDriveAuth.status().account?.id,
       uploadAllowed: canCreateCloudSaveUploadGuard(
         prefixSafeForUpload &&
           cloudSaveContext.prefixIdentityMode !== "session",

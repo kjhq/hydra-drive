@@ -1,5 +1,5 @@
 !macro customUnInstall
   ${ifNot} ${isUpdated}
-    RMDir /r "$LOCALAPPDATA\hydralauncher-updater"
+    RMDir /r "$LOCALAPPDATA\hydra-drive-updater"
   ${endIf}
 !macroend

@@ -3,6 +3,8 @@ import {
   SpinnerIcon,
   UploadSimpleIcon,
 } from "@phosphor-icons/react";
+import { platformToEmulationSavePlatform } from "@renderer/helpers";
+import { driveErrorMessage } from "@renderer/hooks/use-google-drive";
 import type {
   EmulationCloudSave,
   EmulationSavePlatform,
@@ -13,17 +15,15 @@ import type {
 } from "@types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { platformToEmulationSavePlatform } from "@renderer/helpers";
+import { useBigPictureToast } from "../../../../hooks";
+import { EmulationCloudRestoreModal } from "../../../../pages/settings/emulation/emulation-cloud-restore-modal";
+import { SettingsSection } from "../../../../pages/settings/settings-section";
 import {
   Button,
   Checkbox,
   HorizontalFocusGroup,
   VerticalFocusGroup,
 } from "../../../common";
-import { useBigPictureToast } from "../../../../hooks";
-import { useUserDetails } from "../../../../hooks/use-user-details.hook";
-import { SettingsSection } from "../../../../pages/settings/settings-section";
-import { EmulationCloudRestoreModal } from "../../../../pages/settings/emulation/emulation-cloud-restore-modal";
 import { CloudSavesList } from "./cloud-saves-list";
 
 import "./cloud-tab.scss";
@@ -130,7 +130,6 @@ export function GameCloudSettingsTab({
   const { t: tGameDetails } = useTranslation("game_details");
   const { t: tSettings } = useTranslation("settings");
   const { showErrorToast, showSuccessToast } = useBigPictureToast();
-  const { userDetails } = useUserDetails();
 
   const emulationPlatform =
     game.shop === "launchbox"
@@ -176,7 +175,7 @@ export function GameCloudSettingsTab({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const backupsPerGameLimit = userDetails?.quirks?.backupsPerGameLimit ?? 0;
+  const backupsPerGameLimit = 0;
   const hasReachedLimit =
     backupsPerGameLimit > 0 && artifacts.length >= backupsPerGameLimit;
   const hasRestoreInProgress = restoringArtifactId !== null;
@@ -260,14 +259,8 @@ export function GameCloudSettingsTab({
       return;
     }
 
-    const params = new URLSearchParams({
-      objectId: game.objectId,
-      shop: game.shop,
-    });
-    const result = await globalThis.window.electron.hydraApi
-      .get<GameArtifact[]>(`/profile/games/artifacts?${params.toString()}`, {
-        needsSubscription: true,
-      })
+    const result = await window.electron
+      .getGameArtifacts(game.objectId, game.shop)
       .catch(() => []);
     setArtifacts(result ?? []);
     setLoadingArtifacts(false);
@@ -443,9 +436,9 @@ export function GameCloudSettingsTab({
           game.shop,
           artifactId
         );
-      } catch {
+      } catch (error) {
         setRestoringArtifactId(null);
-        showErrorToast("Failed to restore cloud save");
+        showErrorToast(driveErrorMessage(error));
       }
     },
     [
@@ -465,9 +458,7 @@ export function GameCloudSettingsTab({
       setUpdatingArtifactId(artifactId);
 
       try {
-        await globalThis.window.electron.hydraApi.put(
-          `/profile/games/artifacts/${artifactId}/${freeze ? "freeze" : "unfreeze"}`
-        );
+        await window.electron.updateDriveBackup(artifactId, { pinned: freeze });
         await loadArtifacts();
       } catch {
         showErrorToast("Unable to sync cloud save");
@@ -488,9 +479,7 @@ export function GameCloudSettingsTab({
         if (isEmulationGame) {
           await globalThis.window.electron.deleteEmulationSave(artifactId);
         } else {
-          await globalThis.window.electron.hydraApi.delete<{ ok: boolean }>(
-            `/profile/games/artifacts/${artifactId}`
-          );
+          await window.electron.deleteDriveBackup(artifactId);
         }
         showSuccessToast("Cloud save removed");
         await loadArtifacts();

@@ -1,9 +1,9 @@
-import updater, { UpdateInfo } from "electron-updater";
+import { db, levelKeys } from "@main/level";
 import { logger, WindowManager } from "@main/services";
+import { publishNotificationUpdateReadyToInstall } from "@main/services/notifications";
 import { AppUpdaterEvent, UserPreferences } from "@types";
 import { app } from "electron";
-import { publishNotificationUpdateReadyToInstall } from "@main/services/notifications";
-import { db, levelKeys } from "@main/level";
+import updater, { UpdateInfo } from "electron-updater";
 
 const { autoUpdater } = updater;
 const sendEventsForDebug = false;
@@ -42,6 +42,15 @@ export class UpdateManager {
   }
 
   public static async checkForUpdates() {
+    const owner = import.meta.env.MAIN_VITE_RELEASE_OWNER?.trim();
+    const repo = import.meta.env.MAIN_VITE_RELEASE_REPO?.trim();
+    if (
+      !owner ||
+      !repo ||
+      (owner.toLowerCase() === "hydralauncher" &&
+        repo.toLowerCase() === "hydra")
+    )
+      return false;
     autoUpdater
       .removeAllListeners()
       .on("update-available", (info: UpdateInfo) => {

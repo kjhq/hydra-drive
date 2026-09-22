@@ -1,6 +1,3 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import {
   ClockIcon,
   CodeIcon,
@@ -13,6 +10,10 @@ import {
   TrashIcon,
   UploadIcon,
 } from "@primer/octicons-react";
+import { useGoogleDrive } from "@renderer/hooks/use-google-drive";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 
 import { Button, ConfirmationModal, GuideLink } from "@renderer/components";
 import {
@@ -21,7 +22,7 @@ import {
   getSkuRegionFlag,
   getSkuRegionFromSaveIdentity,
 } from "@renderer/helpers";
-import { useToast, useUserDetails } from "@renderer/hooks";
+import { useToast } from "@renderer/hooks";
 import type {
   EmulationCloudSave,
   EmulationSavePlatform,
@@ -61,9 +62,8 @@ export function GameEmulationSaves({
   objectId,
 }: Readonly<GameEmulationSavesProps>) {
   const { t } = useTranslation("settings");
-  const { t: tHydraCloud } = useTranslation("hydra_cloud");
   const { showSuccessToast, showErrorToast } = useToast();
-  const { hasActiveSubscription } = useUserDetails();
+  const { isDriveConnected } = useGoogleDrive();
   const navigate = useNavigate();
 
   const [cloudSaves, setCloudSaves] = useState<EmulationCloudSave[]>([]);
@@ -76,7 +76,7 @@ export function GameEmulationSaves({
   const isMemoryCardPlatform = platform === "ps1" || platform === "ps2";
 
   const load = useCallback(async () => {
-    if (!hasActiveSubscription) {
+    if (!isDriveConnected) {
       setCloudSaves([]);
       setRecords([]);
       return;
@@ -92,7 +92,7 @@ export function GameEmulationSaves({
     } finally {
       setLoading(false);
     }
-  }, [hasActiveSubscription, platform, objectId]);
+  }, [isDriveConnected, platform, objectId]);
 
   useEffect(() => {
     load();
@@ -160,12 +160,12 @@ export function GameEmulationSaves({
     load();
   }, [deleteFor, showSuccessToast, t, load]);
 
-  if (!hasActiveSubscription) {
+  if (!isDriveConnected) {
     return (
       <div className="game-emulation-saves__upgrade">
-        <p>{tHydraCloud("hydra_cloud_feature_found")}</p>
-        <Button onClick={() => window.electron.openCheckout()}>
-          {tHydraCloud("learn_more")}
+        <p>{"Connect Google Drive to back up and restore saves."}</p>
+        <Button onClick={() => window.electron.connectGoogleDrive()}>
+          {"Connect Google Drive"}
         </Button>
       </div>
     );

@@ -1,6 +1,7 @@
 import type { GameShop, SyncGameCloudSaveResult } from "@types";
 
 export interface CloudSaveLaunchGuard {
+  accountId?: string;
   environmentId: string;
   baseRemoteHash: string | null;
   uploadAllowed: boolean;

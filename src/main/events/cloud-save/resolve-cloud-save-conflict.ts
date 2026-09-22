@@ -15,7 +15,8 @@ registerEvent(
     operationId: string,
     objectId: string,
     shop: GameShop,
-    resolution: CloudSaveConflictResolution
+    resolution: CloudSaveConflictResolution,
+    expectedHeadIds?: string[]
   ) => {
     if (!operationId) {
       throw new Error("Cloud save sync operation ID is required");
@@ -29,14 +30,20 @@ registerEvent(
       );
     }
 
-    return resolveCloudSaveConflict(objectId, shop, resolution, (progress) => {
-      if (!event.sender.isDestroyed()) {
-        const payload: CloudSaveSyncIpcProgressPayload = {
-          operationId,
-          ...progress,
-        };
-        event.sender.send("on-cloud-save-sync-progress", payload);
-      }
-    });
+    return resolveCloudSaveConflict(
+      objectId,
+      shop,
+      resolution,
+      (progress) => {
+        if (!event.sender.isDestroyed()) {
+          const payload: CloudSaveSyncIpcProgressPayload = {
+            operationId,
+            ...progress,
+          };
+          event.sender.send("on-cloud-save-sync-progress", payload);
+        }
+      },
+      expectedHeadIds
+    );
   }
 );

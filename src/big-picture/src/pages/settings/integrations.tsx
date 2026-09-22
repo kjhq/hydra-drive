@@ -1,3 +1,4 @@
+import { BigPictureDriveSettings } from "../../components/google-drive";
 import "./integrations.scss";
 
 import type {
@@ -12,14 +13,14 @@ import { useMemo } from "react";
 import { useFeature } from "../../hooks";
 import type { FocusOverrideTarget } from "../../services";
 import {
+  IntegrationProviderSection,
+  type IntegrationProviderConfig,
+} from "./integration-provider-section";
+import {
   getIntegrationProviderCheckboxFocusId,
   SETTINGS_HEADER_RETURN_TARGET,
   type IntegrationProviderId,
 } from "./settings-navigation";
-import {
-  IntegrationProviderSection,
-  type IntegrationProviderConfig,
-} from "./integration-provider-section";
 
 interface SettingsSectionProps {
   className?: string;
@@ -142,6 +143,7 @@ export function IntegrationsSettingsSection({
           : "integrations-settings-section"
       }
     >
+      <BigPictureDriveSettings />
       {visibleProviders.map((provider, index) => {
         const previousProvider = visibleProviders[index - 1];
         const nextProvider = visibleProviders[index + 1];

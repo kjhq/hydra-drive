@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
+import { GoogleDriveAuth } from "../google-drive/auth";
 
-import { cloudSaveCustomPathsSublevel, db, levelKeys } from "@main/level";
+import { cloudSaveCustomPathsSublevel } from "@main/level";
 import { logger } from "@main/services/logger";
 import type {
   CloudSaveCustomPath,
   CloudSaveCustomPathBindings,
   CloudSaveRule,
   GameShop,
-  User,
 } from "@types";
 
 import {
@@ -15,6 +15,7 @@ import {
   getCurrentCloudSaveCustomPathContext,
   type CloudSaveCustomPathContext,
 } from "./custom-path";
+import { resolveStoredCloudSaveCustomPathBindings } from "./custom-path-binding-resolver";
 import {
   applyCloudSaveCustomPathLocalPathMigrations,
   confirmStoredCloudSaveCustomPaths,
@@ -24,19 +25,12 @@ import {
   trackStoredCloudSaveCustomPaths,
   type StoredCloudSaveCustomPath,
 } from "./custom-path-binding-state";
-import { resolveStoredCloudSaveCustomPathBindings } from "./custom-path-binding-resolver";
 import { CloudSaveOperationCoordinator } from "./operation-coordinator";
 
 const storeMutationCoordinator = new CloudSaveOperationCoordinator<void>();
 let storeMutationId = 0;
 
-const getCurrentUserId = async () => {
-  const user = await db.get<string, User>(levelKeys.user, {
-    valueEncoding: "json",
-  });
-  if (!user?.id) throw new Error("Cloud save custom paths require a user");
-  return user.id;
-};
+const getCurrentUserId = async () => `google:${GoogleDriveAuth.accountId()}`;
 
 const getStorageKey = async (shop: GameShop, objectId: string) =>
   cloudSaveCustomPathStorageKey(await getCurrentUserId(), shop, objectId);

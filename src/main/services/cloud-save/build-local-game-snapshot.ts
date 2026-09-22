@@ -1,10 +1,12 @@
-import { SystemPath } from "@main/services/system-path";
 import { cloudSaveLocalHashCacheSublevel, levelKeys } from "@main/level";
+import { SystemPath } from "@main/services/system-path";
 import type {
   CloudSaveCustomPathBindings,
   GameShop,
   LocalGameSnapshotContext,
 } from "@types";
+import { isGameRunning } from "../game-running-state";
+import { recoverRestores } from "../google-drive/restore-runtime";
 
 import { NativeAddon } from "../native-addon";
 import { getCloudSaveGameContext } from "./cloud-save-game-context";
@@ -21,6 +23,10 @@ export const buildLocalGameSnapshotContext = async (
   suppliedContext?: Awaited<ReturnType<typeof getCloudSaveGameContext>>,
   options: BuildLocalGameSnapshotContextOptions = {}
 ): Promise<LocalGameSnapshotContext> => {
+  await recoverRestores(JSON.stringify([shop, objectId]), async () => {
+    if (isGameRunning(objectId, shop))
+      throw new Error("cloud_save_game_running");
+  });
   const context =
     suppliedContext ?? (await getCloudSaveGameContext(objectId, shop));
   const { game, pathContext, environmentId } = context;

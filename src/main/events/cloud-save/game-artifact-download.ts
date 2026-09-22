@@ -1,18 +1,14 @@
-import { HydraApi } from "@main/services";
+import { downloadOpaque } from "@main/services/google-drive/opaque-saves";
+import { DriveSaveStore } from "@main/services/google-drive/store";
 
-export interface GameArtifactDownload {
-  downloadUrl: string;
-  objectKey: string;
-  homeDir: string;
-  winePrefixPath: string | null;
-}
-
-export const requestGameArtifactDownload = (
-  gameArtifactId: string,
+export async function downloadGameArtifactPayload(
+  id: string,
+  target: string,
   signal?: AbortSignal
-): Promise<GameArtifactDownload> =>
-  HydraApi.post<GameArtifactDownload>(
-    `/profile/games/artifacts/${gameArtifactId}/download`,
-    undefined,
-    { signal }
-  );
+) {
+  const commit = await new DriveSaveStore().record(id);
+  if (commit.identity.kind !== "legacy")
+    throw new Error("drive_invalid_backup");
+  await downloadOpaque(commit, target, signal);
+  return commit;
+}
