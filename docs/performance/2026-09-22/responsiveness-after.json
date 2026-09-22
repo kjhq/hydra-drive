@@ -1,0 +1,59 @@
+{
+  "measuredAt": "2026-09-22T13:57:55.196Z",
+  "source": "working-tree",
+  "head": "83bf06286fba5613dc6fcab7945560da9a6e5067",
+  "node": "v24.15.0",
+  "platform": "darwin-arm64",
+  "count": 3000,
+  "navigation": {
+    "medianMs": 2.6465839999999616,
+    "trials": [
+      {
+        "elapsedMs": 3.3684580000000324,
+        "snapshots": 1,
+        "copiedNodeEntries": 6000
+      },
+      {
+        "elapsedMs": 2.6465839999999616,
+        "snapshots": 1,
+        "copiedNodeEntries": 6000
+      },
+      {
+        "elapsedMs": 2.194082999999978,
+        "snapshots": 1,
+        "copiedNodeEntries": 6000
+      }
+    ]
+  },
+  "renderer": {
+    "mountMs": 19.312332999999967,
+    "mountedHeapDeltaBytes": 6914436,
+    "mount": {
+      "preferencesReads": 1,
+      "libraryReads": 1,
+      "listeners": {
+        "preferences": 1,
+        "library": 1,
+        "downloads": 1
+      }
+    },
+    "afterUpdate": {
+      "preferencesReads": 1,
+      "libraryReads": 2,
+      "listeners": {
+        "preferences": 1,
+        "library": 1,
+        "downloads": 1
+      }
+    },
+    "afterUnmount": {
+      "preferencesReads": 1,
+      "libraryReads": 2,
+      "listeners": {
+        "preferences": 0,
+        "library": 0,
+        "downloads": 0
+      }
+    }
+  }
+}

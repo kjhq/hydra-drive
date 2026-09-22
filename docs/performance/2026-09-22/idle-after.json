@@ -1,0 +1,31 @@
+{
+  "measuredAt": "2026-09-22T13:57:56.333Z",
+  "source": "working-tree",
+  "node": "v24.15.0",
+  "platform": "darwin-arm64",
+  "gamesCount": 100,
+  "ticks": 30,
+  "workload": "30 unchanged discovery cycles executed back-to-back, not an idle wall-clock CPU measurement",
+  "discovery": {
+    "elapsedMs": 2.663250000000005,
+    "cpuMicros": {
+      "user": 4298,
+      "system": 4283
+    },
+    "directoryReads": 201
+  },
+  "separatePrefixes": {
+    "prefixes": 100,
+    "elapsedMs": 18.106625000000008,
+    "directoryReads": 300
+  },
+  "library": {
+    "elapsedMs": 3.0025830000000155,
+    "databaseScans": 1
+  },
+  "checks": [
+    "same 100 games discovered on every cycle",
+    "same 3000 library records returned",
+    "new database write visible on next read"
+  ]
+}

@@ -1,43 +1,28 @@
-import { useCallback, useEffect, useState } from "react";
-import { IS_DESKTOP } from "../constants";
+import { useSyncExternalStore } from "react";
 import type { LibraryGame } from "@types";
+import { createSharedAsyncStore } from "../../../shared/shared-async-store";
+
+const libraryStore = createSharedAsyncStore<LibraryGame[]>({
+  initial: [],
+  load: async () => (await globalThis.window?.electron?.getLibrary?.()) ?? [],
+  connect: (_update, invalidate) => {
+    const electron = globalThis.window?.electron;
+    const unsubscribeLibrary = electron?.onLibraryBatchComplete?.(invalidate);
+    const unsubscribeDownloads = electron?.onDownloadsUpdated?.(invalidate);
+    globalThis.window?.addEventListener("library-update", invalidate);
+    return () => {
+      unsubscribeLibrary?.();
+      unsubscribeDownloads?.();
+      globalThis.window?.removeEventListener("library-update", invalidate);
+    };
+  },
+});
 
 export function useLibrary() {
-  const [library, setLibrary] = useState<LibraryGame[]>([]);
-
-  const updateLibrary = useCallback(async () => {
-    if (!IS_DESKTOP) return;
-    const updatedLibrary = await globalThis.window.electron.getLibrary();
-    setLibrary(updatedLibrary);
-  }, []);
-
-  useEffect(() => {
-    updateLibrary();
-
-    if (!IS_DESKTOP) return;
-
-    const unsubscribeLibraryBatch =
-      globalThis.window.electron.onLibraryBatchComplete(() => {
-        updateLibrary();
-      });
-
-    const unsubscribeDownloadsUpdated =
-      globalThis.window.electron.onDownloadsUpdated(() => {
-        updateLibrary();
-      });
-
-    const handleLibraryUpdate = () => updateLibrary();
-    globalThis.window.addEventListener("library-update", handleLibraryUpdate);
-
-    return () => {
-      unsubscribeLibraryBatch();
-      unsubscribeDownloadsUpdated();
-      globalThis.window.removeEventListener(
-        "library-update",
-        handleLibraryUpdate
-      );
-    };
-  }, [updateLibrary]);
-
-  return { library, updateLibrary };
+  const library = useSyncExternalStore(
+    libraryStore.subscribe,
+    libraryStore.getSnapshot,
+    libraryStore.getSnapshot
+  );
+  return { library, updateLibrary: libraryStore.refresh };
 }

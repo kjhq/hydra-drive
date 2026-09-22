@@ -42,6 +42,7 @@ import {
 } from "./linux-process-match";
 import { logger, networkLogger } from "./logger";
 import { NativeAddon } from "./native-addon";
+import { readLibraryGames } from "./library-games";
 import { PowerSaveBlockerManager } from "./power-save-blocker";
 import {
   isValidProcessWatcherScan,
@@ -285,12 +286,9 @@ const hasLinuxCompatibilityProcessMatch = (
 export const watchProcesses = async () => {
   startOptionalExecutableCatalogueLoad(() => GameExecutables.ensureLoaded());
 
-  const games = await gamesSublevel
-    .values()
-    .all()
-    .then((results) => {
-      return results.filter((game) => game.isDeleted === false);
-    });
+  const games = await readLibraryGames().then((results) => {
+    return results.filter((game) => game.isDeleted === false);
+  });
 
   if (!games.length) return;
 

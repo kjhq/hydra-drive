@@ -1,9 +1,10 @@
 import { parseAchievementFile } from "./parse-achievement-file";
 import { mergeAchievements } from "./merge-achievements";
 import fs, { readdirSync } from "node:fs";
-import { findAllAchievementFiles } from "./find-achievement-files";
-import { collectGameAchievementFiles } from "./collect-game-achievement-files";
-import { findNestedAchievementFiles } from "./find-nested-achievement-files";
+import {
+  collectGameAchievementFiles,
+  createAchievementFileCollector,
+} from "./collect-game-achievement-files";
 import type {
   AchievementFile,
   Game,
@@ -19,6 +20,7 @@ import { setTimeout } from "node:timers/promises";
 import { Wine } from "../wine";
 import { AchievementMemoryStore } from "./achievement-memory-store";
 import { achievementNotificationPresenter } from "../achievement-notification-presenter-electron";
+import { readLibraryGames } from "../library-games";
 
 const fileStats: Map<string, number> = new Map();
 const fltFiles: Map<string, Set<string>> = new Map();
@@ -54,10 +56,9 @@ const getEnableSteamAchievements = async () => {
 };
 
 const getWatchedGames = async (onlyWithWinePrefix = false) => {
-  const games = await gamesSublevel
-    .values()
-    .all()
-    .then((games) => games.filter((game) => !game.isDeleted));
+  const games = await readLibraryGames().then((games) =>
+    games.filter((game) => !game.isDeleted)
+  );
 
   if (!onlyWithWinePrefix) return games;
 
@@ -71,15 +72,12 @@ const watchAchievementsWindows = async () => {
 
   if (games.length === 0) return;
 
-  const staticFilesByObjectId = findAllAchievementFiles();
-  const nestedFilesByObjectId = await findNestedAchievementFiles();
   const includeSteamCache = await getEnableSteamAchievements();
+  const collect = createAchievementFileCollector();
 
   for (const game of games) {
-    const gameAchievementFiles = await collectGameAchievementFiles(game, {
+    const gameAchievementFiles = await collect(game, {
       includeSteamCache,
-      staticFilesByObjectId,
-      nestedFilesByObjectId,
     });
 
     await processChangedAchievementFiles(game, gameAchievementFiles);
@@ -92,9 +90,10 @@ const watchAchievementsWithWine = async () => {
   if (games.length === 0) return;
 
   const includeSteamCache = await getEnableSteamAchievements();
+  const collect = createAchievementFileCollector();
 
   for (const game of games) {
-    const gameAchievementFiles = await collectGameAchievementFiles(game, {
+    const gameAchievementFiles = await collect(game, {
       includeSteamCache,
     });
 
@@ -369,23 +368,13 @@ export class AchievementWatcherManager {
 
     const includeSteamCache = await getEnableSteamAchievements();
 
-    const isWindows = process.platform === "win32";
-
-    const staticFilesByObjectId = isWindows
-      ? findAllAchievementFiles()
-      : undefined;
-
-    const nestedFilesByObjectId = isWindows
-      ? await findNestedAchievementFiles()
-      : undefined;
+    const collect = createAchievementFileCollector();
 
     return Promise.all(
       games.map(async (game) => ({
         game,
-        achievementFiles: await collectGameAchievementFiles(game, {
+        achievementFiles: await collect(game, {
           includeSteamCache,
-          staticFilesByObjectId,
-          nestedFilesByObjectId,
           awaitGameDirectoryLocations: true,
         }),
       }))

@@ -4,6 +4,7 @@ import { Wine } from "../wine";
 import {
   findAchievementFileInSteamPath,
   findAchievementFiles,
+  findAllAchievementFiles,
   getAlternativeObjectIds,
 } from "./find-achievement-files";
 import { findGameDirectoryAchievementFiles } from "./find-game-directory-achievement-files";
@@ -48,7 +49,7 @@ export const collectGameAchievementFiles = async (
     ? getAlternativeObjectIds(game.objectId).flatMap(
         (objectId) => staticFilesByObjectId.get(objectId) ?? []
       )
-    : findAchievementFiles(game);
+    : await findAchievementFiles(game);
 
   const [nestedFiles, gameDirectoryFiles] = await Promise.all([
     nestedFilesByObjectId ??
@@ -69,4 +70,34 @@ export const collectGameAchievementFiles = async (
   }
 
   return dedupeAchievementFiles(achievementFiles);
+};
+
+/** Share discovery maps across games in one watcher pass (especially shared Wine prefixes). */
+export const createAchievementFileCollector = () => {
+  const prefixes = new Map<
+    string,
+    Promise<[Map<string, AchievementFile[]>, NestedAchievementFiles]>
+  >();
+  return async (
+    game: Game,
+    options: CollectGameAchievementFilesOptions = {}
+  ) => {
+    if (game.shop !== "steam") return [];
+    const prefix =
+      process.platform === "win32" ? "" : getEffectiveWinePrefixPath(game);
+    let discovery = prefixes.get(prefix);
+    if (!discovery) {
+      discovery = Promise.all([
+        findAllAchievementFiles(prefix),
+        findNestedAchievementFiles(prefix),
+      ]);
+      prefixes.set(prefix, discovery);
+    }
+    const [staticFilesByObjectId, nestedFilesByObjectId] = await discovery;
+    return collectGameAchievementFiles(game, {
+      ...options,
+      staticFilesByObjectId,
+      nestedFilesByObjectId,
+    });
+  };
 };

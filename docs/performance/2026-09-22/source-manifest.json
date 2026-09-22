@@ -1,0 +1,32 @@
+{
+  "baseline": "83bf06286fba5613dc6fcab7945560da9a6e5067",
+  "files": {
+    "src/big-picture/src/components/common/focus-item/index.tsx": "5ef131efed58c19099f56811dc6ac20e327beb799be13693ada196aba2adccf1",
+    "src/big-picture/src/hooks/use-library.hook.ts": "201f52b407f730d5cf97dfd4a650b57f32965246275dc56852f9ecd50283cf56",
+    "src/big-picture/src/hooks/use-user-preferences.hook.ts": "2973c01e571e3bbd2a161963c96ee293b956d4c5da8f382136d607835787c44f",
+    "src/big-picture/src/services/navigation.service.ts": "b8f0d4055cfe7f103d4f8e46aab7fceff8da708d0534cddbf01542a9359cf60b",
+    "src/main/services/achievements/achievement-watcher-manager.ts": "d386f0a204cb674d15eb865d9b7d628c5ec540f32e3f0b13a1e57e9c32a46ab8",
+    "src/main/services/achievements/collect-game-achievement-files.ts": "eab5620d5c124abdf9d7067b9ce179c41dc00be720c6528cdf69e5940c0f00eb",
+    "src/main/services/achievements/find-achievement-files.ts": "ae1657ec96202aa67d858ad4d29ae6686f509c8990d56cc475471e427a973b52",
+    "src/main/services/achievements/find-nested-achievement-files.ts": "8f3230c942b0e2ac65544c95548ac697784ed46d5b39ffda814ef6d694e26e20",
+    "src/main/services/process-watcher.ts": "65057281583d6e90f78ae055798091aaf9d37bfd986de2e0fa259d0cf36ad4f3",
+    "scripts/benchmark-idle-discovery.mjs": "252437d52f891f9cc58a95d954c0e654109d1da6eb6469253844d50244556dc7",
+    "scripts/benchmark-responsiveness.mjs": "f4aa140f79e89bc92bcde125e3706af676bcda312b158583bdeaa99445e0cf37",
+    "src/big-picture/src/services/navigation.service.test.ts": "c1083a04fe3722791bdb2e07a18dedb8683abf21c1872a808061bb70bfe33ce1",
+    "src/main/services/achievements/find-achievement-files.test.ts": "0c35e194375a82779762834ec1d2f608953722aac1443c16ee65b58123c911e4",
+    "src/main/services/achievements/watched-directory-cache.test.ts": "a7afc6438ecc78e540db6347aec90c6f61ea9e6201eb47422ad3e7a092ce0e34",
+    "src/main/services/achievements/watched-directory-cache.ts": "bc7352d672b52a682a74c3bc922df1411e26c300083913c4339501705b6885c5",
+    "src/main/services/library-games-snapshot.test.ts": "227057789d766695f546016396336c47276d3bbb7493b5faa16fc59a380eceb2",
+    "src/main/services/library-games-snapshot.ts": "4f179914149b7024f588107494608c88c3dbc9973a9a86ba64255f383de084c7",
+    "src/main/services/library-games.ts": "7248be5c3835ccbebf40f52d7a7269899c915f681b285de25495ad0001c646f8",
+    "src/shared/shared-async-store.test.ts": "c38a05f83b16a104ca5f85cd86cefe2b5205c22f0f45a8e84aa9c5a8d97fe164",
+    "src/shared/shared-async-store.ts": "eaf13cf691a6b101038a85d8d64d9f038b9f30fe8040953bdcc42a9db9d9b514"
+  },
+  "validation": {
+    "tests": 805,
+    "focusedTests": 19,
+    "build": "passed, includes node and web typechecking",
+    "lint": "0 errors; 3 existing hook dependency warnings in focus-item/index.tsx",
+    "reviews": "Correctness and scope reviews completed; findings fixed and rechecked"
+  }
+}

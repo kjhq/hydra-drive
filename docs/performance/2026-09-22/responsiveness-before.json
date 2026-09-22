@@ -1,0 +1,59 @@
+{
+  "measuredAt": "2026-09-22T13:57:54.624Z",
+  "source": "83bf06286fba5613dc6fcab7945560da9a6e5067",
+  "head": "83bf06286fba5613dc6fcab7945560da9a6e5067",
+  "node": "v24.15.0",
+  "platform": "darwin-arm64",
+  "count": 3000,
+  "navigation": {
+    "medianMs": 1103.070834,
+    "trials": [
+      {
+        "elapsedMs": 1118.501125,
+        "snapshots": 3001,
+        "copiedNodeEntries": 9009000
+      },
+      {
+        "elapsedMs": 1103.070834,
+        "snapshots": 3001,
+        "copiedNodeEntries": 9009000
+      },
+      {
+        "elapsedMs": 1097.488042,
+        "snapshots": 3001,
+        "copiedNodeEntries": 9009000
+      }
+    ]
+  },
+  "renderer": {
+    "mountMs": 44.581208999999944,
+    "mountedHeapDeltaBytes": 8877292,
+    "mount": {
+      "preferencesReads": 6000,
+      "libraryReads": 8,
+      "listeners": {
+        "preferences": 6000,
+        "library": 8,
+        "downloads": 8
+      }
+    },
+    "afterUpdate": {
+      "preferencesReads": 6000,
+      "libraryReads": 16,
+      "listeners": {
+        "preferences": 6000,
+        "library": 8,
+        "downloads": 8
+      }
+    },
+    "afterUnmount": {
+      "preferencesReads": 6000,
+      "libraryReads": 16,
+      "listeners": {
+        "preferences": 0,
+        "library": 0,
+        "downloads": 0
+      }
+    }
+  }
+}

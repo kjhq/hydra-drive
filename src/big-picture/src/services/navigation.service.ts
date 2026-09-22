@@ -81,7 +81,7 @@ interface SetFocusRegionOptions {
 const NAVIGATION_DEBUG_STORAGE_KEY = "hydra:big-picture:navigation-debug";
 
 function isNavigationDebugEnabled() {
-  const env = import.meta.env as unknown as Record<
+  const env = (import.meta.env ?? {}) as unknown as Record<
     string,
     string | boolean | undefined
   >;
@@ -143,6 +143,12 @@ export class NavigationService {
   private readonly regionChildOrderCounter = new Map<string, number>();
   private currentFocusId: string | null = null;
   private readonly listeners = new Set<Listener>();
+  private notificationPending = false;
+  private nodesSnapshot: FocusNode[] | null = null;
+  private regionsSnapshot: FocusRegion[] | null = null;
+  private layersSnapshot: FocusLayer[] | null = null;
+  private nodeIdsSnapshot: string[] | null = null;
+  private regionIdsSnapshot: string[] | null = null;
   private readonly lastFocusedByRegionId = new Map<string, string>();
   private readonly pendingInitialFocusByLayerId = new Map<
     string,
@@ -433,7 +439,10 @@ export class NavigationService {
       getScrollAnchor: nextGetScrollAnchor,
     });
 
-    if (registeredRegion.parentRegionId) {
+    if (
+      registeredRegion.parentRegionId &&
+      nextNavigationOrder !== registeredRegion.navigationOrder
+    ) {
       this.sortRegionChildren(registeredRegion.parentRegionId);
     }
 
@@ -570,7 +579,9 @@ export class NavigationService {
       navigationOverrides: nextNavigationOverrides,
     });
 
-    this.sortRegionChildren(registeredNode.regionId);
+    if (nextNavigationOrder !== registeredNode.navigationOrder) {
+      this.sortRegionChildren(registeredNode.regionId);
+    }
 
     const resolvedPendingInitialFocus = this.tryResolvePendingInitialFocus(
       registeredNode.layerId
@@ -622,25 +633,27 @@ export class NavigationService {
   }
 
   public getNodes(): FocusNode[] {
-    return Array.from(this.nodes.values());
+    return (this.nodesSnapshot ??= Array.from(this.nodes.values()));
   }
 
   public getRegions(): FocusRegion[] {
-    return Array.from(this.regions.values()).map((region) => ({
-      id: region.id,
-      parentRegionId: region.parentRegionId,
-      orientation: region.orientation,
-      layerId: region.layerId,
-      navigationOrder: region.navigationOrder,
-      navigationOverrides: region.navigationOverrides,
-      autoScrollMode: region.autoScrollMode,
-      getElement: region.getElement,
-      getScrollAnchor: region.getScrollAnchor,
-    }));
+    return (this.regionsSnapshot ??= Array.from(this.regions.values()).map(
+      (region) => ({
+        id: region.id,
+        parentRegionId: region.parentRegionId,
+        orientation: region.orientation,
+        layerId: region.layerId,
+        navigationOrder: region.navigationOrder,
+        navigationOverrides: region.navigationOverrides,
+        autoScrollMode: region.autoScrollMode,
+        getElement: region.getElement,
+        getScrollAnchor: region.getScrollAnchor,
+      })
+    ));
   }
 
   public getLayers(): FocusLayer[] {
-    return this.layerStack
+    return (this.layersSnapshot ??= this.layerStack
       .map((layerId) => this.layers.get(layerId))
       .filter((layer): layer is FocusLayerRecord => Boolean(layer))
       .map((layer) => ({
@@ -648,12 +661,12 @@ export class NavigationService {
         rootRegionId: layer.rootRegionId,
         openerFocusId: layer.openerFocusId,
         openerRegionId: layer.openerRegionId,
-      }));
+      })));
   }
 
   public clearFocus(): void {
     this.currentFocusId = null;
-    this.notify();
+    this.notify(false);
   }
 
   public setFocus(id: string) {
@@ -666,7 +679,7 @@ export class NavigationService {
 
     this.currentFocusId = node.id;
     this.updateLastFocusedForNode(node.id);
-    this.notify();
+    this.notify(false);
     return node.id;
   }
 
@@ -814,9 +827,9 @@ export class NavigationService {
       currentFocusId: this.currentFocusId,
       activeLayerId: this.getActiveLayerId(),
       nodeCount: this.nodes.size,
-      nodeIds: Array.from(this.nodes.keys()),
+      nodeIds: (this.nodeIdsSnapshot ??= Array.from(this.nodes.keys())),
       regionCount: this.regions.size,
-      regionIds: Array.from(this.regions.keys()),
+      regionIds: (this.regionIdsSnapshot ??= Array.from(this.regions.keys())),
       layerCount: layers.length,
       layerIds: layers.map((layer) => layer.id),
       listenerCount: this.listeners.size,
@@ -933,23 +946,33 @@ export class NavigationService {
 
     if (!children || !childOrder) return;
 
-    const alreadyRegistered = children.some(
-      (child) => child.type === target.type && child.id === target.id
-    );
-
-    if (alreadyRegistered) return;
-
     const targetKey = this.getTargetKey(target);
-
+    // Registration already rejects duplicate live nodes/regions. Historical
+    // order can survive a persistent region's unmount and is not membership.
     if (!childOrder.has(targetKey)) {
       const nextOrder = this.regionChildOrderCounter.get(regionId) ?? 0;
-
       childOrder.set(targetKey, nextOrder);
       this.regionChildOrderCounter.set(regionId, nextOrder + 1);
     }
 
-    children.push(target);
-    this.sortRegionChildren(regionId);
+    // Most cards mount in display order. Append in O(1), and only search for an
+    // insertion point when an explicit order puts this item before its siblings.
+    const last = children.at(-1);
+    if (!last || this.compareChildTargets(regionId, last, target) <= 0) {
+      children.push(target);
+      return;
+    }
+    let low = 0;
+    let high = children.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (this.compareChildTargets(regionId, children[middle], target) <= 0) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    children.splice(low, 0, target);
   }
 
   private removeChildTarget(regionId: string, target: FocusTarget) {
@@ -990,31 +1013,39 @@ export class NavigationService {
 
     if (!children) return;
 
-    children.sort((left, right) => {
-      const leftNavigationOrder = this.getNavigationOrderForTarget(left);
-      const rightNavigationOrder = this.getNavigationOrderForTarget(right);
+    children.sort((left, right) =>
+      this.compareChildTargets(regionId, left, right)
+    );
+  }
 
-      if (
-        leftNavigationOrder != null &&
-        rightNavigationOrder != null &&
-        leftNavigationOrder !== rightNavigationOrder
-      ) {
-        return leftNavigationOrder - rightNavigationOrder;
-      }
+  private compareChildTargets(
+    regionId: string,
+    left: FocusTarget,
+    right: FocusTarget
+  ) {
+    const leftNavigationOrder = this.getNavigationOrderForTarget(left);
+    const rightNavigationOrder = this.getNavigationOrderForTarget(right);
 
-      if (leftNavigationOrder != null && rightNavigationOrder == null) {
-        return -1;
-      }
+    if (
+      leftNavigationOrder != null &&
+      rightNavigationOrder != null &&
+      leftNavigationOrder !== rightNavigationOrder
+    ) {
+      return leftNavigationOrder - rightNavigationOrder;
+    }
 
-      if (leftNavigationOrder == null && rightNavigationOrder != null) {
-        return 1;
-      }
+    if (leftNavigationOrder != null && rightNavigationOrder == null) {
+      return -1;
+    }
 
-      return (
-        this.getHistoricalOrderForTarget(regionId, left) -
-        this.getHistoricalOrderForTarget(regionId, right)
-      );
-    });
+    if (leftNavigationOrder == null && rightNavigationOrder != null) {
+      return 1;
+    }
+
+    return (
+      this.getHistoricalOrderForTarget(regionId, left) -
+      this.getHistoricalOrderForTarget(regionId, right)
+    );
   }
 
   private hasPendingInitialFocus(layerId: string) {
@@ -1143,7 +1174,7 @@ export class NavigationService {
 
     if (this.currentFocusId) {
       this.updateLastFocusedForNode(this.currentFocusId);
-      this.notify();
+      this.notify(false);
       return true;
     }
 
@@ -1956,7 +1987,21 @@ export class NavigationService {
     return `region target "${target.regionId}" could not be focused`;
   }
 
-  private notify() {
-    this.listeners.forEach((listener) => listener());
+  private notify(structureChanged = true) {
+    if (structureChanged) {
+      this.nodesSnapshot = null;
+      this.regionsSnapshot = null;
+      this.layersSnapshot = null;
+      this.nodeIdsSnapshot = null;
+      this.regionIdsSnapshot = null;
+    }
+    // React mounts a whole grid in one turn. Keep the service synchronous for
+    // input handlers, but publish its final state once before the next paint.
+    if (this.notificationPending) return;
+    this.notificationPending = true;
+    queueMicrotask(() => {
+      this.notificationPending = false;
+      this.listeners.forEach((listener) => listener());
+    });
   }
 }

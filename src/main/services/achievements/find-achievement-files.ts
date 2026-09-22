@@ -6,6 +6,10 @@ import { achievementsLogger } from "../logger";
 import { SystemPath } from "../system-path";
 import { getSteamLocation, getSteamUsersIds } from "../steam";
 import { Wine } from "../wine";
+import { createWatchedDirectoryCache } from "./watched-directory-cache";
+
+const folderCache =
+  createWatchedDirectoryCache<Map<string, AchievementFile[]>>();
 
 const getAppDataPath = () => {
   if (process.platform === "win32") {
@@ -257,31 +261,14 @@ export const getAlternativeObjectIds = (objectId: string) => {
   return [objectId];
 };
 
-export const findAchievementFiles = (game: Game) => {
-  const achievementFiles: AchievementFile[] = [];
+export const findAchievementFiles = async (game: Game) => {
   const effectiveWinePrefixPath =
     Wine.getEffectivePrefixPath(game.winePrefixPath, game.objectId) ?? "";
 
-  for (const cracker of crackers) {
-    for (const { folderPath, fileLocation } of getPathFromCracker(cracker)) {
-      for (const objectId of getAlternativeObjectIds(game.objectId)) {
-        const filePath = path.join(
-          effectiveWinePrefixPath,
-          folderPath,
-          ...mapFileLocationWithObjectId(fileLocation, objectId)
-        );
-
-        if (fs.existsSync(filePath)) {
-          achievementFiles.push({
-            type: cracker,
-            filePath,
-          });
-        }
-      }
-    }
-  }
-
-  return achievementFiles;
+  const files = await findAllAchievementFiles(effectiveWinePrefixPath);
+  return getAlternativeObjectIds(game.objectId).flatMap(
+    (id) => files.get(id) ?? []
+  );
 };
 
 const steamUserIds = await getSteamUsersIds();
@@ -328,36 +315,59 @@ const mapFileLocationWithObjectId = (
   );
 };
 
-export const findAllAchievementFiles = () => {
+export const findAllAchievementFiles = async (winePrefixPath = "") => {
   const gameAchievementFiles = new Map<string, AchievementFile[]>();
+  const locationsByFolder = new Map<
+    string,
+    { type: Cracker; fileLocation: string[] }[]
+  >();
 
   for (const cracker of crackers) {
     for (const { folderPath, fileLocation } of getPathFromCracker(cracker)) {
-      if (!fs.existsSync(folderPath)) {
-        continue;
-      }
-
-      const objectIds = fs.readdirSync(folderPath);
-
-      for (const objectId of objectIds) {
-        const filePath = path.join(
-          folderPath,
-          ...mapFileLocationWithObjectId(fileLocation, objectId)
-        );
-
-        if (!fs.existsSync(filePath)) continue;
-
-        const achivementFile = {
-          type: cracker,
-          filePath,
-        };
-
-        gameAchievementFiles.get(objectId)
-          ? gameAchievementFiles.get(objectId)!.push(achivementFile)
-          : gameAchievementFiles.set(objectId, [achivementFile]);
-      }
+      const root = path.join(winePrefixPath, folderPath);
+      const locations = locationsByFolder.get(root) ?? [];
+      locations.push({ type: cracker, fileLocation });
+      locationsByFolder.set(root, locations);
     }
   }
-
+  for (const [root, locations] of locationsByFolder) {
+    const files = await folderCache.get(root, async () => {
+      const found = new Map<string, AchievementFile[]>();
+      const objectIds = await fs.promises
+        .readdir(root)
+        .catch((error: NodeJS.ErrnoException) => {
+          if (
+            ["ENOENT", "ENOTDIR", "EACCES", "EPERM"].includes(error.code ?? "")
+          )
+            return [];
+          throw error;
+        });
+      for (const objectId of objectIds) {
+        for (const { type, fileLocation } of locations) {
+          const filePath = path.join(
+            root,
+            ...mapFileLocationWithObjectId(fileLocation, objectId)
+          );
+          if (
+            !(await fs.promises.access(filePath).then(
+              () => true,
+              () => false
+            ))
+          )
+            continue;
+          const list = found.get(objectId) ?? [];
+          list.push({ type, filePath });
+          found.set(objectId, list);
+        }
+      }
+      return found;
+    });
+    for (const [id, list] of files) {
+      gameAchievementFiles.set(id, [
+        ...(gameAchievementFiles.get(id) ?? []),
+        ...list,
+      ]);
+    }
+  }
   return gameAchievementFiles;
 };

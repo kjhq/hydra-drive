@@ -4,8 +4,10 @@ import { Cracker } from "@shared";
 import { achievementsLogger } from "../logger";
 import { getEmulatorSaveFolders } from "./find-achievement-files";
 import { scanSaveFolder } from "./scan-nested-achievement-files";
+import { createWatchedDirectoryCache } from "./watched-directory-cache";
 
 export type NestedAchievementFiles = Map<string, AchievementFile[]>;
+const folderCache = createWatchedDirectoryCache<Map<string, string[]>>();
 
 export const findNestedAchievementFiles = async (
   winePrefixPath = ""
@@ -14,7 +16,9 @@ export const findNestedAchievementFiles = async (
 
   try {
     for (const folderPath of getEmulatorSaveFolders(winePrefixPath)) {
-      const filePathsByObjectId = await scanSaveFolder(folderPath);
+      const filePathsByObjectId = await folderCache.get(folderPath, () =>
+        scanSaveFolder(folderPath)
+      );
 
       for (const [objectId, filePaths] of filePathsByObjectId) {
         const objectIdFiles = files.get(objectId) ?? [];
