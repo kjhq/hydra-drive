@@ -142,7 +142,6 @@ declare global {
     onDrivePromptChanged: (
       callback: (prompt: DrivePrompt | null) => void
     ) => () => void;
-    importLocalHydraSettings: () => Promise<{ games: number; paths: number }>;
     getGoogleDriveConnection: () => Promise<GoogleDriveConnection>;
     connectGoogleDrive: () => Promise<GoogleDriveConnection>;
     disconnectGoogleDrive: () => Promise<GoogleDriveConnection>;

@@ -17,6 +17,9 @@ import { BigPictureDriveHistory } from "../../../google-drive";
 
 import {
   getCloudSaveSyncErrorKind,
+  getCustomPathApprovalError,
+  getCustomPathApprovalErrorKey,
+  type CustomPathApprovalError,
   shouldSyncCloudSaveOnGamePage,
 } from "@renderer/pages/game-details/cloud-save-v2/cloud-save-presentation";
 import { useCloudSaveOverview } from "@renderer/pages/game-details/cloud-save-v2/use-cloud-save-overview";
@@ -38,15 +41,6 @@ import {
 
 import "./styles.scss";
 
-type CustomPathApprovalError =
-  | "generic"
-  | "mapped-overlap"
-  | "custom-overlap"
-  | "remote-target-overlap"
-  | "environment-unavailable"
-  | "foreign-environment"
-  | "unreadable";
-
 interface BigPictureCloudSaveContextValue {
   overview: CloudSaveOverview | null;
   isRefreshing: boolean;
@@ -64,62 +58,6 @@ interface BigPictureCloudSaveContextValue {
 
 const bigPictureCloudSaveContext =
   createContext<BigPictureCloudSaveContextValue | null>(null);
-
-function getCustomPathApprovalError(error: unknown): CustomPathApprovalError {
-  const message = error instanceof Error ? error.message : "";
-
-  if (message.includes("cloud_save_custom_path_custom_location_overlap")) {
-    return "custom-overlap";
-  }
-  if (message.includes("cloud_save_custom_path_mapped_location_overlap")) {
-    return "mapped-overlap";
-  }
-  if (message.includes("cloud_save_custom_path_remote_target_overlap")) {
-    return "remote-target-overlap";
-  }
-  if (message.includes("cloud_save_custom_path_environment_unavailable")) {
-    return "environment-unavailable";
-  }
-  if (message.includes("cloud_save_custom_path_foreign_environment")) {
-    return "foreign-environment";
-  }
-  if (message.includes("cloud_save_custom_path_unreadable")) {
-    return "unreadable";
-  }
-  return "generic";
-}
-
-const getCustomPathApprovalErrorKey = (
-  error: CustomPathApprovalError | null,
-  purpose: CloudSaveCustomPathApproval["purpose"] | undefined
-) => {
-  if (error === "mapped-overlap") {
-    return "cloud_save_v2_custom_path_mapped_overlap_error_description";
-  }
-  if (error === "custom-overlap") {
-    return "cloud_save_v2_custom_path_custom_overlap_error_description";
-  }
-  if (error === "remote-target-overlap") {
-    return "cloud_save_v2_custom_path_remote_target_overlap_error_description";
-  }
-  if (error === "environment-unavailable") {
-    return "cloud_save_v2_custom_path_environment_error_description";
-  }
-  if (error === "foreign-environment") {
-    return "cloud_save_v2_custom_path_wine_environment_error_description";
-  }
-  if (error === "unreadable") {
-    return "cloud_save_v2_custom_path_read_error_description";
-  }
-  if (!error) return null;
-  if (purpose === "manual-sync") {
-    return "cloud_save_v2_path_approval_manual_sync_error_description";
-  }
-  if (purpose === "custom-path-rebind") {
-    return "cloud_save_v2_custom_path_rebind_error_description";
-  }
-  return "cloud_save_v2_path_approval_error_description";
-};
 
 export function useBigPictureCloudSave() {
   const context = useContext(bigPictureCloudSaveContext);

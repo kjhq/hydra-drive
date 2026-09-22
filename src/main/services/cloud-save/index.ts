@@ -15,7 +15,6 @@ export * from "./custom-path-overlap";
 export * from "./custom-path-selection";
 export * from "./custom-path-store";
 export * from "./delete-game-cloud-save-data";
-export * from "./download-remote-snapshot-to-temp";
 export * from "./get-cloud-save-overview";
 export * from "./get-cloud-save-v2-file-details";
 export * from "./launch-guard";

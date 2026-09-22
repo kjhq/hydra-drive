@@ -28,14 +28,14 @@ Drive scope reference: <https://developers.google.com/workspace/drive/api/guides
 
 A public privacy policy must describe Google identity data, save contents and file/path metadata, device name, storage in the user's Drive and local queue, token handling, disconnect/revocation, manual deletion and retention, support/deletion requests, and the other unchanged Hydra services. Supply real maintainer identity, URLs and contact details before distributing. No policy or verification approval is implied by this implementation.
 
-## First use and migration
+## First use
 
-1. Restore any cloud-only backups with official Hydra first. There is no Hydra cloud importer.
-2. Close official Hydra. In Waypoint's Cloud saves settings, connect Google Drive, then choose **Import from Hydra**, then **Choose Hydra folder** and select the original Hydra user-data folder containing `hydra-db`.
-3. The importer reads a temporary database copy and imports missing games, emulator configuration, and custom path bindings for the connected Google account. It does not overwrite existing entries or import account credentials, remote anchors, pending Hydra deletions, or automatic-sync preferences. Game executable/Wine paths are preserved. Game files remain in place.
+1. Start with saves already on your device. If a save exists only in Hydra Cloud, restore it using official Hydra first.
+2. Add your games to Waypoint, then connect Google Drive in **Settings → Cloud saves**.
+3. Open a game's save settings to check its detected save folders or choose a custom folder, then create your first backup.
 4. Enable automatic sync individually for supported games. Manual-only save formats remain manual.
 
-Google accounts have separate queues, anchors, custom bindings and opaque-save accepted bases. Import local path settings separately after intentionally switching accounts. Do not run two launchers against the same game saves at once.
+Google accounts have separate queues, anchors, custom bindings and accepted save bases. After switching accounts, choose any custom save folders for that account. Do not run two launchers against the same game saves at once.
 
 ## Storage and recovery
 

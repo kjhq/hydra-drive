@@ -13,6 +13,8 @@ const {
   getCloudSavePresentation,
   getCloudSaveSnapshotPanelMode,
   getCloudSaveSyncErrorKind,
+  getCustomPathApprovalError,
+  getCustomPathApprovalErrorKey,
   getCloudSaveUploadLimitError,
   hasCloudSaveDataToDelete,
   shouldShowCloudSaveEmptySnapshot,
@@ -575,5 +577,49 @@ describe("game page automatic cloud save sync", () => {
     assert.equal(shouldSyncOnGamePage({ hasExecutablePath: false }), false);
     assert.equal(shouldSyncOnGamePage({ isGameRunning: true }), false);
     assert.equal(shouldSyncOnGamePage({ isSyncing: true }), false);
+  });
+});
+
+describe("custom save path approval errors", () => {
+  it("keeps actionable errors and purpose-specific fallbacks consistent", () => {
+    const cases = [
+      ["custom_location_overlap", "custom_overlap"],
+      ["mapped_location_overlap", "mapped_overlap"],
+      ["remote_target_overlap", "remote_target_overlap"],
+      ["environment_unavailable", "environment"],
+      ["foreign_environment", "wine_environment"],
+      ["unreadable", "read"],
+    ];
+    for (const [code, description] of cases) {
+      const error = new Error(`IPC failed: cloud_save_custom_path_${code}`);
+      assert.equal(
+        getCustomPathApprovalErrorKey(
+          getCustomPathApprovalError(error),
+          "manual-sync"
+        ),
+        `cloud_save_v2_custom_path_${description}_error_description`
+      );
+    }
+    for (const error of [
+      undefined,
+      null,
+      "cloud_save_custom_path_unreadable",
+      new Error("unknown"),
+    ]) {
+      assert.equal(getCustomPathApprovalError(error), "generic");
+    }
+    assert.equal(getCustomPathApprovalErrorKey(null, "manual-sync"), null);
+    assert.equal(
+      getCustomPathApprovalErrorKey("generic", "manual-sync"),
+      "cloud_save_v2_path_approval_manual_sync_error_description"
+    );
+    assert.equal(
+      getCustomPathApprovalErrorKey("generic", "custom-path-rebind"),
+      "cloud_save_v2_custom_path_rebind_error_description"
+    );
+    assert.equal(
+      getCustomPathApprovalErrorKey("generic", undefined),
+      "cloud_save_v2_path_approval_error_description"
+    );
   });
 });

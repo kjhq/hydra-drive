@@ -10,7 +10,6 @@ import { isGameRunning } from "@main/services/game-running-state";
 import { pack } from "@main/services/google-drive/archive";
 import { GoogleDriveAuth } from "@main/services/google-drive/auth";
 import { DriveError } from "@main/services/google-drive/errors";
-import { importLocalHydraSettings } from "@main/services/google-drive/import-local-settings";
 import { heads } from "@main/services/google-drive/model";
 import { legacyArtifacts } from "@main/services/google-drive/opaque-saves";
 import {
@@ -192,8 +191,6 @@ app.whenReady().then(() => {
     void retryDriveQueue().catch(() => undefined);
   }, 60_000).unref();
 });
-
-registerEvent("importLocalHydraSettings", importLocalHydraSettings);
 
 registerEvent("getDrivePrompt", (event) => currentDrivePrompt(event.sender.id));
 registerEvent("answerDrivePrompt", (event, id: string, accepted: boolean) =>

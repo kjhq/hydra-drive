@@ -18,7 +18,6 @@ export * from "./toast/toast";
 export * from "./vertical-cover-card/vertical-cover-card";
 export * from "./badge/badge";
 export * from "./confirmation-modal/confirmation-modal";
-export * from "./suspense-wrapper/suspense-wrapper";
 export * from "./context-menu/context-menu";
 export * from "./game-context-menu/game-context-menu";
 export * from "./game-context-menu/use-game-actions";

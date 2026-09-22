@@ -68,8 +68,6 @@ export function GoogleDrivePanel({
   const [busy, setBusy] = useState(false);
   const [queue, setQueue] = useState<DriveQueueSummary[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [showImport, setShowImport] = useState(false);
   const refresh = useCallback(async () => {
     setQueue(
       connection.connected && connection.account?.id
@@ -83,7 +81,6 @@ export function GoogleDrivePanel({
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true);
     setFailure(null);
-    setNotice(null);
     try {
       await action();
       await refresh();
@@ -189,14 +186,6 @@ export function GoogleDrivePanel({
             {error || failure}
           </p>
         )}
-        {notice && (
-          <p
-            role="status"
-            className="drive-panel__message drive-panel__message--success"
-          >
-            {notice}
-          </p>
-        )}
       </div>
       <div className="drive-panel__facts">
         <div>
@@ -253,51 +242,6 @@ export function GoogleDrivePanel({
           ))}
         </div>
       )}
-      <div className="drive-panel__section drive-panel__migration">
-        <div>
-          <h4>Moving from Hydra?</h4>
-          <p>Bring your local library and save folders with you.</p>
-        </div>
-        <Action
-          id="drive-show-import"
-          disabled={busy}
-          onClick={() => setShowImport(!showImport)}
-        >
-          {showImport ? "Hide import details" : "Import from Hydra"}
-        </Action>
-        {showImport && (
-          <div className="drive-panel__import-details">
-            <p>
-              Close Hydra before importing. If a save exists only in Hydra
-              Cloud, restore it in Hydra first.
-            </p>
-            <p>
-              Your games and folder choices will be copied. Automatic sync
-              starts off for every game.
-            </p>
-            <Action
-              id="drive-import-local"
-              disabled={busy || !connection.connected}
-              onClick={() =>
-                void run(async () => {
-                  const result =
-                    await window.electron.importLocalHydraSettings();
-                  setNotice(
-                    `Imported ${result.games} games and ${result.paths} save folders. Choose a game to turn on sync.`
-                  );
-                })
-              }
-            >
-              Choose Hydra folder
-            </Action>
-            {!connection.connected && (
-              <p className="drive-panel__muted">
-                Connect Google Drive above to import your settings.
-              </p>
-            )}
-          </div>
-        )}
-      </div>
     </section>
   );
 }

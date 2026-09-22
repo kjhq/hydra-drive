@@ -1,4 +1,5 @@
 import type {
+  CloudSaveCustomPathApproval,
   CloudSaveOverview,
   CloudSaveState,
   CloudSaveSyncAction,
@@ -109,6 +110,72 @@ export const getCloudSaveSyncErrorKind = (
     return "restore-metadata";
   }
   return "generic";
+};
+
+export type CustomPathApprovalError =
+  | "generic"
+  | "mapped-overlap"
+  | "custom-overlap"
+  | "remote-target-overlap"
+  | "environment-unavailable"
+  | "foreign-environment"
+  | "unreadable";
+
+export const getCustomPathApprovalError = (
+  error: unknown
+): CustomPathApprovalError => {
+  const message = error instanceof Error ? error.message : "";
+  if (message.includes("cloud_save_custom_path_custom_location_overlap")) {
+    return "custom-overlap";
+  }
+  if (message.includes("cloud_save_custom_path_mapped_location_overlap")) {
+    return "mapped-overlap";
+  }
+  if (message.includes("cloud_save_custom_path_remote_target_overlap")) {
+    return "remote-target-overlap";
+  }
+  if (message.includes("cloud_save_custom_path_environment_unavailable")) {
+    return "environment-unavailable";
+  }
+  if (message.includes("cloud_save_custom_path_foreign_environment")) {
+    return "foreign-environment";
+  }
+  if (message.includes("cloud_save_custom_path_unreadable")) {
+    return "unreadable";
+  }
+  return "generic";
+};
+
+export const getCustomPathApprovalErrorKey = (
+  error: CustomPathApprovalError | null,
+  purpose: CloudSaveCustomPathApproval["purpose"] | undefined
+) => {
+  if (error === "mapped-overlap") {
+    return "cloud_save_v2_custom_path_mapped_overlap_error_description";
+  }
+  if (error === "custom-overlap") {
+    return "cloud_save_v2_custom_path_custom_overlap_error_description";
+  }
+  if (error === "remote-target-overlap") {
+    return "cloud_save_v2_custom_path_remote_target_overlap_error_description";
+  }
+  if (error === "environment-unavailable") {
+    return "cloud_save_v2_custom_path_environment_error_description";
+  }
+  if (error === "foreign-environment") {
+    return "cloud_save_v2_custom_path_wine_environment_error_description";
+  }
+  if (error === "unreadable") {
+    return "cloud_save_v2_custom_path_read_error_description";
+  }
+  if (!error) return null;
+  if (purpose === "manual-sync") {
+    return "cloud_save_v2_path_approval_manual_sync_error_description";
+  }
+  if (purpose === "custom-path-rebind") {
+    return "cloud_save_v2_custom_path_rebind_error_description";
+  }
+  return "cloud_save_v2_path_approval_error_description";
 };
 
 export interface CloudSaveOperationPresentation {
