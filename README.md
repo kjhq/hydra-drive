@@ -1,65 +1,125 @@
-# Waypoint — development fork
+<p align="center">
+  <img src="docs/brand/waypoint-banner.png" alt="Waypoint — Your games. Your progress. Your way. An amber path winds through a charcoal landscape toward a glowing checkpoint." width="1200" />
+</p>
 
-This independent fork replaces Hydra Cloud save storage with your Google Drive.
-It is **not yet qualified for public release**. Google OAuth configuration and live
-Windows/Linux/Steam Deck testing are still in progress. Do not use development
-builds as your only copy of important saves.
+<h1 align="center">Waypoint</h1>
 
-See [implementation and build instructions](docs/google-drive-saves.md),
-[Google configuration](docs/google-oauth-setup.md), and
-[validation runs](https://github.com/kjhq/hydra-drive/actions/workflows/drive-validation.yml).
-Report fork issues at [kjhq/hydra-drive](https://github.com/kjhq/hydra-drive/issues).
-The original project's license and attribution are retained below.
+<p align="center"><strong>Your games. Your progress. Your way.</strong></p>
 
----
+<p align="center">
+  An open-source game launcher with save backups in your own Google Drive.
+</p>
 
-<div align="center">
+<p align="center">
+  <a href="https://github.com/kjhq/hydra-drive/actions/workflows/drive-validation.yml"><img src="https://github.com/kjhq/hydra-drive/actions/workflows/drive-validation.yml/badge.svg" alt="Drive save validation build status" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-F2B866?labelColor=191A18" alt="MIT license" /></a>
+  <img src="https://img.shields.io/badge/status-in_development-F2B866?labelColor=191A18" alt="Status: in development" />
+</p>
 
-[<img src="https://raw.githubusercontent.com/hydralauncher/hydra/refs/heads/main/resources/icon.png" width="144"/>](https://help.hydralauncher.gg)
+<p align="center">
+  <a href="docs/google-drive-saves.md">Save backup guide</a> ·
+  <a href="#build-from-source">Build from source</a> ·
+  <a href="https://github.com/kjhq/hydra-drive">Repository</a>
+</p>
 
-  <h1 align="center">Hydra Launcher</h1>
+## Pick up where you left off
 
-  <p align="center">
-    <strong>Hydra Launcher is an open-source gaming platform created to be the single tool that you need in order to manage your gaming library. Hydra is written in Node.js (Electron, React, Typescript) and Rust, with libtorrent providing the torrent engine.</strong>
-  </p>
+Waypoint brings your library, game launching, and save history together. Keep
+snapshots in a visible **Waypoint Saves** folder in your Google Drive, restore an
+earlier version, and choose which supported games sync automatically.
 
-[![build](https://img.shields.io/github/actions/workflow/status/hydralauncher/hydra/build.yml)](https://github.com/hydralauncher/hydra/actions)
-[![release](https://img.shields.io/github/package-json/v/hydralauncher/hydra)](https://github.com/hydralauncher/hydra/releases)
-[![chocolatey](https://img.shields.io/chocolatey/v/hydralauncher.svg)](https://community.chocolatey.org/packages/hydralauncher)
+Save backups don't require a Hydra account or subscription. Waypoint is built on
+Hydra; its catalogue, downloads, social features, and other online integrations
+still use separate upstream services.
 
-![Hydra Launcher Home Page](./docs/screenshot.png)
+> **Development preview** — Waypoint is not yet qualified for public release.
+> Google OAuth production setup and live Windows, Linux, and Steam Deck testing
+> remain in progress. Keep an independent copy of important saves when testing.
 
-</div>
+## A home for your games and progress
 
-## Features
+| Feature                    | What you can do                                                                                                                              |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Your saves, your Drive** | Back up PC saves and supported emulator saves to your own Google Drive.                                                                      |
+| **A history to return to** | Browse snapshots and restore earlier progress. Conflicting saves remain separate for you to choose; game files are not automatically merged. |
+| **Sync on your terms**     | Start with manual backups, then opt supported games into automatic sync. Manual-only formats stay manual.                                    |
+| **Your library, together** | Organize and launch games you own, browse the catalogue, and use supported emulator integrations.                                            |
+| **Desktop or controller**  | Use the desktop interface or Big Picture mode, with platform and controller qualification still in progress.                                 |
 
-- Add games that you own to your library
-- Have a nice profile that shows what you are playing to your friends
-- Save your game progress in the cloud with Hydra Cloud
-- Unlock achievements
-- Navigate through a rich catalogue with a powerful suggestion algorithm
-- Discover new games that you haven't played before
+## Start with your saves
 
-## Build from source and contributing
+Once you've built and configured a development version:
 
-Please, refer to our Documentation pages: [docs.hydralauncher.gg](https://docs.hydralauncher.gg/getting-started)
+1. Add a game whose saves are already on your device.
+2. Connect Google Drive in **Settings → Cloud saves**.
+3. Check the game's detected save folders, or choose a custom folder, and create
+   a manual backup.
+4. Check your backup history before enabling automatic sync for supported games.
 
-### Local development requirements
+If your only copy is in Hydra Cloud, restore it with official Hydra first.
+See the [save backup guide](docs/google-drive-saves.md) for recovery, account
+switching, supported save behavior, and release qualification requirements.
 
-- Node.js + Yarn
-- Rust toolchain (for `hydra-native`)
-- Git and a C++ toolchain (Visual Studio C++ Build Tools on Windows, GCC/Clang on Linux, Xcode command-line tools on macOS). The native build obtains CMake and CTest automatically through vcpkg.
+## Build from source
 
-After installing dependencies, `postinstall` now builds the Rust native addon automatically (`hydra-native/hydra-native.node`).
+Use **Node.js 22.21.0** (the version used in validation CI), **Yarn Classic
+1.22.22**, a stable Rust toolchain, Git, and your platform's native build tools:
 
-The native build includes a Rust wrapper around pinned libtorrent. Development and packaged torrenting no longer require Python.
+- **Windows:** Visual Studio C++ Build Tools.
+- **Linux:** a C/C++ toolchain and the dependencies listed in the
+  [validation workflow](.github/workflows/drive-validation.yml).
+- **macOS development:** Xcode command-line tools. The current release
+  qualification targets Windows and Linux/Steam Deck.
 
-## Contributors
+```sh
+git clone https://github.com/kjhq/hydra-drive.git waypoint
+cd waypoint
+yarn --frozen-lockfile
+```
 
-<a href="https://github.com/hydralauncher/hydra/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=hydralauncher/hydra" />
-</a>
+Copy `.env.example` to `.env` and configure the service settings described in
+the [build configuration guide](docs/google-drive-saves.md#build-configuration).
+For Google Drive development, follow the
+[maintainer OAuth setup](docs/google-oauth-setup.md). The maintainer supplies the
+Google app configuration; end users should not need to create a Google project.
 
-## License
+```sh
+yarn dev
+```
 
-Hydra is licensed under the [MIT License](LICENSE).
+Dependency installation builds the native addon, including its pinned
+libtorrent bridge. For local validation:
+
+```sh
+yarn typecheck
+yarn test
+yarn test:native-saves
+yarn build
+```
+
+For Windows or Linux packages, run `yarn build:win` or `yarn build:linux` on the
+corresponding platform. These commands do not publish a release. See
+[Drive save validation](https://github.com/kjhq/hydra-drive/actions/workflows/drive-validation.yml)
+for automated build results; passing CI does not replace live-account and device
+testing.
+
+## Contributing
+
+The repository's [issue tracker](https://github.com/kjhq/hydra-drive/issues) is
+currently disabled. Code contributions can be submitted as
+[pull requests](https://github.com/kjhq/hydra-drive/pulls). For privacy or security
+enquiries, see the [support page](docs/site/support.html).
+
+For changes, include the relevant validation results and keep documentation in
+step with the behavior. Save and restore changes also need the recovery and
+account-isolation checks in the [save backup guide](docs/google-drive-saves.md).
+
+## Built on open source
+
+Waypoint is an independent fork of [Hydra Launcher](https://github.com/hydralauncher/hydra),
+created by Los Broxas and its contributors. Thank you to the upstream community
+for the foundation. Waypoint is not affiliated with or endorsed by the upstream
+Hydra project or Google.
+
+Licensed under the [MIT License](LICENSE). The original copyright and license
+notices are preserved.

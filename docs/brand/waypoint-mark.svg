@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Waypoint</title>
+  <desc id="desc">An amber route forms a geometric W and ends at a circular waypoint.</desc>
+  <path d="M20 32 42 96 64 53 86 96 102 49" stroke="#F2B866" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="108" cy="30" r="9" fill="#F2B866"/>
+</svg>

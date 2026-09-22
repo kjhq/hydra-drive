@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Waypoint icon</title>
+  <desc id="desc">An amber W-shaped route with a circular endpoint on a rounded charcoal square.</desc>
+  <rect width="160" height="160" rx="36" fill="#191A18"/>
+  <g transform="translate(16 16)">
+    <path d="M20 32 42 96 64 53 86 96 102 49" stroke="#F2B866" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="108" cy="30" r="9" fill="#F2B866"/>
+  </g>
+</svg>
